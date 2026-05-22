@@ -1,149 +1,284 @@
-import { useMemo } from 'react';
-import { useStore } from '../store/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { formatCurrency } from '../utils/helpers';
-import { Printer } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useStore, computeBalances, filterByDateRange } from '../store/useStore';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Panel } from '../components/ui/Panel';
+import { DateRangeFilter } from '../components/ui/DateRangeFilter';
+import { formatCurrency } from '../utils/helpers';
+import { Printer, TrendingUp, TrendingDown } from 'lucide-react';
+import type { DateRange } from '../types';
+
+interface Item {
+  codigo: string;
+  nombre: string;
+  monto: number;
+}
 
 export function EstadoResultados() {
-  const { entries, accounts } = useStore();
+  const entries = useStore(s => s.entries);
+  const accounts = useStore(s => s.accounts);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
-  const { totalIngresos, totalCostos, totalGastos, ingresos, costos, gastos } = useMemo(() => {
-    const balances: Record<string, number> = {};
-    entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
-      entry.lineas.forEach(line => {
-        const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
-        if (!acc) return;
-        if (!balances[acc.codigo]) balances[acc.codigo] = 0;
-        
-        if (acc.naturaleza === 'Deudor') {
-          balances[acc.codigo] += (line.debe - line.haber);
-        } else {
-          balances[acc.codigo] += (line.haber - line.debe);
-        }
-      });
-    });
-
-    const ingresosList: { nombre: string, monto: number }[] = [];
-    const costosList: { nombre: string, monto: number }[] = [];
-    const gastosList: { nombre: string, monto: number }[] = [];
-
+  const data = useMemo(() => {
+    const filtered = filterByDateRange(entries, dateRange.from, dateRange.to);
+    const balances = computeBalances(filtered, accounts);
+    const ingresos: Item[] = [];
+    const costos: Item[] = [];
+    const gastos: Item[] = [];
     let totalIngresos = 0;
     let totalCostos = 0;
     let totalGastos = 0;
 
-    accounts.forEach(acc => {
-      const balance = balances[acc.codigo];
-      if (!balance) return;
-
-      if (acc.codigo.startsWith('4')) {
-        ingresosList.push({ nombre: acc.nombre, monto: balance });
-        totalIngresos += balance;
-      } else if (acc.codigo.startsWith('5.1')) {
-        costosList.push({ nombre: acc.nombre, monto: balance });
-        totalCostos += balance;
-      } else if (acc.codigo.startsWith('5.2') || acc.codigo.startsWith('6')) {
-        gastosList.push({ nombre: acc.nombre, monto: balance });
-        totalGastos += balance;
+    for (const code in balances) {
+      const b = balances[code];
+      if (b.saldo === 0) continue;
+      const item = { codigo: code, nombre: b.nombre, monto: b.saldo };
+      if (code.startsWith('4')) {
+        ingresos.push(item);
+        totalIngresos += b.saldo;
+      } else if (code.startsWith('5.1')) {
+        costos.push(item);
+        totalCostos += b.saldo;
+      } else if (code.startsWith('5.2') || code.startsWith('6')) {
+        gastos.push(item);
+        totalGastos += b.saldo;
       }
-    });
+    }
 
-    return { totalIngresos, totalCostos, totalGastos, ingresos: ingresosList, costos: costosList, gastos: gastosList };
-  }, [entries, accounts]);
+    const sortByCode = (arr: Item[]) =>
+      arr.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
 
-  const utilidadBruta = totalIngresos - totalCostos;
-  const utilidadNeta = utilidadBruta - totalGastos;
+    return {
+      ingresos: sortByCode(ingresos),
+      costos: sortByCode(costos),
+      gastos: sortByCode(gastos),
+      totalIngresos,
+      totalCostos,
+      totalGastos,
+    };
+  }, [entries, accounts, dateRange]);
+
+  const utilidadBruta = data.totalIngresos - data.totalCostos;
+  const utilidadNeta = utilidadBruta - data.totalGastos;
+  const margenBruto = data.totalIngresos > 0 ? (utilidadBruta / data.totalIngresos) * 100 : 0;
+  const margenNeto = data.totalIngresos > 0 ? (utilidadNeta / data.totalIngresos) * 100 : 0;
+  const hasData = data.ingresos.length + data.costos.length + data.gastos.length > 0;
+  const isProfit = utilidadNeta >= 0;
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-main">Estado de Resultados</h1>
-          <p className="text-text-muted mt-1">Ingresos, costos y gastos del periodo.</p>
-        </div>
-        <Button variant="outline" onClick={() => window.print()}>
-          <Printer className="w-4 h-4 mr-2" /> Imprimir Estado
-        </Button>
-      </div>
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <PageHeader
+        title="Estado de Resultados"
+        description="Ingresos, costos y gastos del periodo"
+        icon={TrendingUp}
+        actions={
+          <>
+            <DateRangeFilter value={dateRange} onChange={setDateRange} />
+            {hasData && (
+              <Badge variant={isProfit ? 'success' : 'error'} dot>
+                {isProfit ? 'Utilidad' : 'Pérdida'}: {formatCurrency(utilidadNeta)}
+              </Badge>
+            )}
+            <Button variant="outline" leftIcon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>
+              Imprimir
+            </Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-center">ESTADO DE RESULTADOS</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-primary-50 text-primary-700">
-                <tr>
-                  <th className="p-4 font-semibold border-b border-border-soft">Concepto</th>
-                  <th className="p-4 font-semibold border-b border-border-soft text-right w-40">Parcial</th>
-                  <th className="p-4 font-semibold border-b border-border-soft text-right w-40">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Ingresos */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">INGRESOS</td></tr>
-                {ingresos.map((item, i) => (
-                  <tr key={'i'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b-2 border-border-soft">
-                  <td className="p-4 pl-8 font-semibold italic">Total Ingresos</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-bold text-text-main">{formatCurrency(totalIngresos)}</td>
-                </tr>
+      {!hasData ? (
+        <Card>
+          <CardContent className="py-2">
+            <EmptyState
+              icon={TrendingUp}
+              title="Sin datos"
+              description="Registra ingresos y gastos para generar el estado de resultados"
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <Card className="lg:col-span-2">
+            <Section
+              title="Ingresos"
+              tone="success"
+              items={data.ingresos}
+              total={data.totalIngresos}
+              totalLabel="Total Ingresos"
+            />
 
-                {/* Costos */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">COSTOS</td></tr>
-                {costos.map((item, i) => (
-                  <tr key={'c'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b border-border-soft">
-                  <td className="p-4 pl-8 font-semibold italic">Total Costos</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-semibold text-text-main">{formatCurrency(totalCostos)}</td>
-                </tr>
-                
-                {/* Utilidad Bruta */}
-                <tr className="border-b-2 border-primary-100 bg-primary-50/30">
-                  <td colSpan={2} className="p-4 font-bold text-primary-800">UTILIDAD BRUTA</td>
-                  <td className="p-4 text-right font-bold text-primary-800">{formatCurrency(utilidadBruta)}</td>
-                </tr>
+            <Section
+              title="Costo de Ventas"
+              tone="warning"
+              items={data.costos}
+              total={data.totalCostos}
+              totalLabel="Total Costos"
+              negative
+            />
 
-                {/* Gastos */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">GASTOS</td></tr>
-                {gastos.map((item, i) => (
-                  <tr key={'g'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b border-border-soft">
-                  <td className="p-4 pl-8 font-semibold italic">Total Gastos</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-semibold text-text-main">{formatCurrency(totalGastos)}</td>
-                </tr>
+            <BigTotal label="Utilidad Bruta" value={utilidadBruta} tone="primary" />
 
-                {/* Utilidad Neta */}
-                <tr className="bg-primary-50">
-                  <td colSpan={2} className="p-4 font-bold text-primary-900 text-base">UTILIDAD O PÉRDIDA DEL EJERCICIO</td>
-                  <td className="p-4 text-right font-bold text-primary-900 text-base border-b-4 border-double border-primary-600">
-                    {formatCurrency(utilidadNeta)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <Section
+              title="Gastos Operativos"
+              tone="error"
+              items={data.gastos}
+              total={data.totalGastos}
+              totalLabel="Total Gastos"
+              negative
+            />
+
+            <BigTotal label={isProfit ? 'Utilidad Neta del Ejercicio' : 'Pérdida Neta del Ejercicio'} value={utilidadNeta} tone={isProfit ? 'success' : 'error'} highlight />
+          </Card>
+
+          {/* Sidebar resumen */}
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <h3 className="text-sm font-semibold text-text-main">Indicadores</h3>
+
+                <KPIBar label="Margen Bruto" value={margenBruto} positive={margenBruto >= 0} />
+                <KPIBar label="Margen Neto" value={margenNeto} positive={margenNeto >= 0} />
+
+                <div className="pt-3 border-t border-border-soft space-y-3">
+                  <Stat label="Ingresos" value={data.totalIngresos} tone="success" />
+                  <Stat label="Costo Ventas" value={data.totalCostos} tone="warning" />
+                  <Stat label="Gastos" value={data.totalGastos} tone="error" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Panel tone={isProfit ? 'success' : 'error'} padding="md">
+              <div className="flex items-center gap-2">
+                {isProfit ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <p className="text-xs uppercase tracking-widest font-semibold text-white/80">
+                  {isProfit ? 'Resultado positivo' : 'Resultado negativo'}
+                </p>
+              </div>
+              <p className="text-3xl font-bold tabular-nums mt-2">{formatCurrency(utilidadNeta)}</p>
+              <p className="text-xs text-white/80 mt-1">{margenNeto.toFixed(1)}% margen sobre ingresos</p>
+            </Panel>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  tone,
+  items,
+  total,
+  totalLabel,
+  negative,
+}: {
+  title: string;
+  tone: 'success' | 'warning' | 'error';
+  items: Item[];
+  total: number;
+  totalLabel: string;
+  negative?: boolean;
+}) {
+  if (items.length === 0) return null;
+  const toneColors = {
+    success: 'text-success',
+    warning: 'text-warning',
+    error: 'text-error',
+  };
+  return (
+    <div>
+      <div className="px-5 py-2.5 bg-surface-soft border-y border-border-soft flex items-center justify-between">
+        <h3 className={`text-xs uppercase tracking-widest font-bold ${toneColors[tone]}`}>{title}</h3>
+      </div>
+      <div className="divide-y divide-border-soft">
+        {items.map(item => (
+          <div key={item.codigo} className="flex items-center justify-between px-5 py-2 hover:bg-surface-soft/40 transition-colors">
+            <div className="flex items-center gap-2.5">
+              <span className="font-mono text-[10px] text-text-subtle w-14">{item.codigo}</span>
+              <span className="text-sm text-text-main">{item.nombre}</span>
+            </div>
+            <span className="text-sm tabular-nums text-text-muted">
+              {negative && '('}
+              {formatCurrency(item.monto)}
+              {negative && ')'}
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between px-5 py-2.5 bg-surface-soft/60">
+          <span className="text-xs uppercase tracking-wider font-semibold text-text-muted">{totalLabel}</span>
+          <span className="text-sm font-bold tabular-nums text-text-main">
+            {negative && '('}
+            {formatCurrency(total)}
+            {negative && ')'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BigTotal({
+  label,
+  value,
+  tone,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  tone: 'primary' | 'success' | 'error';
+  highlight?: boolean;
+}) {
+  const toneColors = {
+    primary: 'text-primary-700 dark:text-primary-300',
+    success: 'text-success',
+    error: 'text-error',
+  };
+  return (
+    <div
+      className={`flex items-center justify-between px-5 py-3.5 border-t-2 ${
+        highlight
+          ? 'border-primary-500/40 bg-primary-50 dark:bg-primary-100/10'
+          : 'border-border-soft'
+      }`}
+    >
+      <span className={`text-sm uppercase tracking-wider font-bold ${toneColors[tone]}`}>{label}</span>
+      <span className={`text-lg font-bold tabular-nums ${toneColors[tone]}`}>{formatCurrency(value)}</span>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'error' }) {
+  const dotColors = { success: 'bg-success', warning: 'bg-warning', error: 'bg-error' };
+  return (
+    <div className="flex items-center justify-between">
+      <span className="flex items-center gap-2 text-sm text-text-muted">
+        <span className={`w-1.5 h-1.5 rounded-full ${dotColors[tone]}`} />
+        {label}
+      </span>
+      <span className="text-sm font-medium tabular-nums">{formatCurrency(value)}</span>
+    </div>
+  );
+}
+
+function KPIBar({ label, value, positive }: { label: string; value: number; positive: boolean }) {
+  const pct = Math.min(Math.abs(value), 100);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-text-muted">{label}</span>
+        <span className={`text-sm font-bold tabular-nums ${positive ? 'text-success' : 'text-error'}`}>
+          {value.toFixed(1)}%
+        </span>
+      </div>
+      <div className="h-1.5 bg-surface-soft rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${positive ? 'bg-success' : 'bg-error'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }

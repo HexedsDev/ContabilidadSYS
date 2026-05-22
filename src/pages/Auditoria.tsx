@@ -1,113 +1,263 @@
-
-import { useStore } from '../store/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { ShieldAlert, CheckCircle2, AlertTriangle, AlertCircle, Play } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useStore, computeBalances } from '../store/useStore';
+import { Card, CardContent } from '../components/ui/Card';
+import {
+  ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  Play,
+  Trash2,
+  ListChecks,
+} from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-// generateId removed
+import { PageHeader } from '../components/ui/PageHeader';
+import { EmptyState } from '../components/ui/EmptyState';
+import { useToast } from '../components/ui/toast-context';
+import { formatDateTime, formatCurrency } from '../utils/helpers';
+
+const AUDIT_RULES = [
+  { title: 'Partida doble', desc: 'Debe = Haber en cada partida' },
+  { title: 'Cuentas de detalle', desc: 'Movimientos solo en cuentas hoja' },
+  { title: 'Saldos normales', desc: 'Sin saldos contrarios a la naturaleza' },
+  { title: 'Cuentas duplicadas', desc: 'Sin repetir cuenta en una misma partida' },
+  { title: 'Líneas válidas', desc: 'Cada línea debe tener monto > 0' },
+  { title: 'Exclusividad debe/haber', desc: 'Una línea no puede tener ambos' },
+];
 
 export function Auditoria() {
-  const { entries, accounts, alerts, addAlert, resolveAlert } = useStore();
+  const entries = useStore(s => s.entries);
+  const accounts = useStore(s => s.accounts);
+  const alerts = useStore(s => s.alerts);
+  const addAlert = useStore(s => s.addAlert);
+  const resolveAlert = useStore(s => s.resolveAlert);
+  const clearAlerts = useStore(s => s.clearAlerts);
+  const toast = useToast();
+
+  const [filter, setFilter] = useState<'all' | 'alta' | 'media' | 'baja'>('all');
+
+  const activeAlerts = useMemo(
+    () => alerts.filter(a => !a.resuelta && (filter === 'all' || a.severidad === filter)),
+    [alerts, filter]
+  );
+  const resolvedAlerts = useMemo(() => alerts.filter(a => a.resuelta), [alerts]);
 
   const runAudit = () => {
+    clearAlerts();
     const now = new Date().toISOString();
-    let foundIssues = 0;
+    let count = 0;
+    const balances = computeBalances(entries, accounts);
 
-    // Check 1: Partidas descuadradas
-    entries.forEach(entry => {
+    for (const entry of entries) {
       const debe = entry.lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
       const haber = entry.lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
+
       if (Math.abs(debe - haber) > 0.01) {
         addAlert({
           fecha: now,
           tipo: 'descuadre',
           severidad: 'alta',
-          descripcion: `La partida #${entry.numero} tiene un descuadre. Debe: ${debe}, Haber: ${haber}`,
-          sugerencia: 'Revisar y ajustar los montos de la partida para que cuadren.',
+          descripcion: `Partida #${entry.numero} descuadrada: ${formatCurrency(debe)} vs ${formatCurrency(haber)}`,
+          sugerencia: 'Revisa los montos hasta que Debe = Haber',
           referencia_id: entry.id,
         });
-        foundIssues++;
+        count++;
       }
 
-      // Check 2: Uso de cuentas agrupadoras
-      entry.lineas.forEach(line => {
+      const seenCodes = new Set<string>();
+      for (const line of entry.lineas) {
+        if (seenCodes.has(line.cuenta_codigo)) {
+          addAlert({
+            fecha: now,
+            tipo: 'movimiento_invalido',
+            severidad: 'media',
+            descripcion: `Partida #${entry.numero} repite la cuenta ${line.cuenta_codigo}`,
+            sugerencia: 'Consolida las líneas con la misma cuenta',
+            referencia_id: entry.id,
+          });
+          count++;
+        }
+        seenCodes.add(line.cuenta_codigo);
+
+        if (line.debe > 0 && line.haber > 0) {
+          addAlert({
+            fecha: now,
+            tipo: 'movimiento_invalido',
+            severidad: 'alta',
+            descripcion: `Partida #${entry.numero}: una línea tiene valor en Debe y Haber simultáneamente`,
+            sugerencia: 'Separa el movimiento en dos líneas distintas',
+            referencia_id: entry.id,
+          });
+          count++;
+        }
+
+        if ((line.debe || 0) === 0 && (line.haber || 0) === 0) {
+          addAlert({
+            fecha: now,
+            tipo: 'movimiento_invalido',
+            severidad: 'baja',
+            descripcion: `Partida #${entry.numero} contiene una línea sin monto`,
+            sugerencia: 'Elimina la línea vacía o asigna un valor',
+            referencia_id: entry.id,
+          });
+          count++;
+        }
+
         const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
         if (acc && acc.tipo === 'Agrupador') {
           addAlert({
             fecha: now,
             tipo: 'cuenta_agrupadora',
             severidad: 'alta',
-            descripcion: `La partida #${entry.numero} utiliza la cuenta agrupadora ${acc.codigo}.`,
-            sugerencia: 'Cambiar a una cuenta de detalle (nivel más bajo).',
+            descripcion: `Partida #${entry.numero} usa cuenta agrupadora ${acc.codigo}`,
+            sugerencia: 'Sustituye por una cuenta de detalle',
             referencia_id: entry.id,
           });
-          foundIssues++;
+          count++;
         }
-      });
-    });
+      }
+    }
 
-    if (foundIssues === 0) {
-      alert('Auditoría completada sin encontrar problemas nuevos.');
+    // Saldos anormales (negativos para naturaleza correspondiente)
+    for (const code in balances) {
+      const b = balances[code];
+      if (b.saldo < 0) {
+        addAlert({
+          fecha: now,
+          tipo: 'saldo_negativo',
+          severidad: 'media',
+          descripcion: `La cuenta ${b.codigo} (${b.nombre}) tiene saldo ${b.naturaleza.toLowerCase()} anormal: ${formatCurrency(b.saldo)}`,
+          sugerencia: 'Revisa los movimientos. Esto puede indicar un error de clasificación',
+        });
+        count++;
+      }
+    }
+
+    if (count === 0) {
+      toast.success('Auditoría OK', 'No se encontraron problemas');
     } else {
-      alert(`Auditoría completada. Se encontraron ${foundIssues} problemas.`);
+      toast.warning(`Auditoría: ${count} hallazgo${count > 1 ? 's' : ''}`, 'Revisa las alertas activas');
     }
   };
 
-  const activeAlerts = alerts.filter(a => !a.resuelta);
-  const resolvedAlerts = alerts.filter(a => a.resuelta);
+  const severityCounts = {
+    alta: alerts.filter(a => !a.resuelta && a.severidad === 'alta').length,
+    media: alerts.filter(a => !a.resuelta && a.severidad === 'media').length,
+    baja: alerts.filter(a => !a.resuelta && a.severidad === 'baja').length,
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-main flex items-center gap-2">
-            <ShieldAlert className="w-6 h-6 text-warning" />
-            Módulo de Auditoría
-          </h1>
-          <p className="text-text-muted mt-1">Detección automática de inconsistencias contables.</p>
-        </div>
-        <Button onClick={runAudit} variant="primary">
-          <Play className="w-4 h-4 mr-2" /> Ejecutar Auditoría
-        </Button>
+      <PageHeader
+        title="Módulo de Auditoría"
+        description="Detección automática de inconsistencias contables"
+        icon={ShieldAlert}
+        actions={
+          <>
+            {alerts.length > 0 && (
+              <Button variant="outline" leftIcon={<Trash2 className="w-4 h-4" />} onClick={clearAlerts}>
+                Limpiar alertas
+              </Button>
+            )}
+            <Button leftIcon={<Play className="w-4 h-4" />} onClick={runAudit}>
+              Ejecutar auditoría
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatBox
+          label="Alta"
+          value={severityCounts.alta}
+          active={filter === 'alta'}
+          onClick={() => setFilter(filter === 'alta' ? 'all' : 'alta')}
+          tone="error"
+        />
+        <StatBox
+          label="Media"
+          value={severityCounts.media}
+          active={filter === 'media'}
+          onClick={() => setFilter(filter === 'media' ? 'all' : 'media')}
+          tone="warning"
+        />
+        <StatBox
+          label="Baja"
+          value={severityCounts.baja}
+          active={filter === 'baja'}
+          onClick={() => setFilter(filter === 'baja' ? 'all' : 'baja')}
+          tone="info"
+        />
+        <StatBox label="Resueltas" value={resolvedAlerts.length} tone="success" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader className="border-b border-border-soft pb-4">
-              <CardTitle className="text-error flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
-                Alertas Activas ({activeAlerts.length})
-              </CardTitle>
-            </CardHeader>
+            <div className="px-5 py-3 border-b border-border-soft flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text-main flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-error" />
+                Alertas activas ({activeAlerts.length})
+              </h2>
+              {filter !== 'all' && (
+                <button
+                  onClick={() => setFilter('all')}
+                  className="text-xs text-primary-600 hover:underline"
+                >
+                  Quitar filtro
+                </button>
+              )}
+            </div>
             <CardContent className="p-0">
               {activeAlerts.length === 0 ? (
-                <div className="p-8 text-center text-text-muted flex flex-col items-center">
-                  <CheckCircle2 className="w-12 h-12 text-success mb-3 opacity-50" />
-                  <p>El sistema se encuentra limpio de errores.</p>
-                </div>
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="Sin alertas activas"
+                  description="El sistema está limpio o aún no se ha ejecutado la auditoría"
+                />
               ) : (
                 <div className="divide-y divide-border-soft">
-                  {activeAlerts.map(alert => (
-                    <div key={alert.id} className="p-4 hover:bg-background transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex gap-3">
-                          <AlertCircle className={`w-5 h-5 shrink-0 ${alert.severidad === 'alta' ? 'text-error' : alert.severidad === 'media' ? 'text-warning' : 'text-info'}`} />
-                          <div>
-                            <p className="text-sm font-bold text-text-main">{alert.descripcion}</p>
-                            <p className="text-sm text-text-muted mt-1">Sugerencia: {alert.sugerencia}</p>
+                  {activeAlerts.map(alert => {
+                    const sevTone =
+                      alert.severidad === 'alta'
+                        ? 'error'
+                        : alert.severidad === 'media'
+                          ? 'warning'
+                          : 'info';
+                    return (
+                      <div key={alert.id} className="p-4 hover:bg-surface-soft/30 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-9 h-9 rounded-sm flex items-center justify-center shrink-0 ${
+                              sevTone === 'error'
+                                ? 'bg-error-soft text-error'
+                                : sevTone === 'warning'
+                                  ? 'bg-warning-soft text-warning'
+                                  : 'bg-info-soft text-info'
+                            }`}
+                          >
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-text-main">{alert.descripcion}</p>
+                            <p className="text-xs text-text-muted mt-1">
+                              <span className="font-medium text-text-main">Sugerencia:</span> {alert.sugerencia}
+                            </p>
                             <div className="flex items-center gap-2 mt-2">
-                              <span className="text-xs text-text-muted">{new Date(alert.fecha).toLocaleString()}</span>
-                              <Badge variant={alert.severidad === 'alta' ? 'error' : 'warning'}>{alert.severidad}</Badge>
+                              <Badge variant={sevTone} size="sm" dot>
+                                {alert.severidad}
+                              </Badge>
+                              <span className="text-[10px] text-text-subtle">{formatDateTime(alert.fecha)}</span>
                             </div>
                           </div>
+                          <Button size="xs" variant="outline" onClick={() => resolveAlert(alert.id)}>
+                            Resolver
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => resolveAlert(alert.id)}>
-                          Resolver
-                        </Button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -115,18 +265,17 @@ export function Auditoria() {
 
           {resolvedAlerts.length > 0 && (
             <Card>
-              <CardHeader className="border-b border-border-soft pb-4">
-                <CardTitle className="text-text-muted flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5" />
-                  Alertas Resueltas ({resolvedAlerts.length})
-                </CardTitle>
-              </CardHeader>
+              <div className="px-5 py-3 border-b border-border-soft">
+                <h2 className="text-sm font-semibold text-text-muted flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Alertas resueltas ({resolvedAlerts.length})
+                </h2>
+              </div>
               <CardContent className="p-0">
                 <div className="divide-y divide-border-soft max-h-64 overflow-y-auto">
                   {resolvedAlerts.map(alert => (
-                    <div key={alert.id} className="p-4 opacity-70">
+                    <div key={alert.id} className="p-3 px-5 opacity-60 hover:opacity-100 transition-opacity">
                       <p className="text-sm line-through text-text-muted">{alert.descripcion}</p>
-                      <span className="text-xs text-text-muted">Resuelta</span>
                     </div>
                   ))}
                 </div>
@@ -137,28 +286,61 @@ export function Auditoria() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Reglas de Auditoría</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-4 text-sm text-text-main">
-                <li className="flex items-start gap-2">
+            <div className="px-5 py-3 border-b border-border-soft">
+              <h2 className="text-sm font-semibold text-text-main flex items-center gap-2">
+                <ListChecks className="w-4 h-4 text-primary-600" />
+                Reglas de auditoría
+              </h2>
+            </div>
+            <CardContent className="space-y-3 pt-4">
+              {AUDIT_RULES.map(rule => (
+                <div key={rule.title} className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>Partida doble:</strong> El total del Debe debe ser exactamente igual al total del Haber en cada partida.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>Cuentas de detalle:</strong> Solo se pueden registrar movimientos en cuentas de último nivel (Detalle).</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                  <span><strong>Saldos normales:</strong> Las cuentas no deben tener un saldo contrario a su naturaleza (ej. Caja negativa).</span>
-                </li>
-              </ul>
+                  <div>
+                    <p className="text-sm font-semibold text-text-main">{rule.title}</p>
+                    <p className="text-xs text-text-muted">{rule.desc}</p>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
       </div>
     </div>
+  );
+}
+
+function StatBox({
+  label,
+  value,
+  active,
+  onClick,
+  tone,
+}: {
+  label: string;
+  value: number;
+  active?: boolean;
+  onClick?: () => void;
+  tone: 'error' | 'warning' | 'info' | 'success';
+}) {
+  const tones = {
+    error: 'text-error',
+    warning: 'text-warning',
+    info: 'text-info',
+    success: 'text-success',
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={`text-left bg-surface border rounded-sm p-4 transition-all ${
+        active
+          ? 'border-primary-500 ring-2 ring-primary-500/20 shadow-md'
+          : 'border-border-soft hover:border-text-subtle'
+      } ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+    >
+      <p className="text-[10px] uppercase tracking-wider font-semibold text-text-subtle">{label}</p>
+      <p className={`text-2xl font-bold mt-1 tabular-nums ${tones[tone]}`}>{value}</p>
+    </button>
   );
 }

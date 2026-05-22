@@ -52,3 +52,21 @@ export interface AuditAlert {
   referencia_id?: string;
   resuelta: boolean;
 }
+
+export interface Empresa {
+  razon_social: string;
+  nit: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  moneda: string;
+  simbolo_moneda: string;
+  periodo_inicio: string; // YYYY-MM-DD
+  periodo_fin: string;    // YYYY-MM-DD
+  ciclo: string;          // e.g. "Ciclo Contable 2026"
+}
+
+export interface DateRange {
+  from: string | null;
+  to: string | null;
+}

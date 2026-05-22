@@ -1,178 +1,222 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import type { JournalEntry, Account } from '../types';
-import { formatCurrency } from './helpers';
+import autoTable, { type CellHookData, type RowInput } from 'jspdf-autotable';
+import type { JournalEntry, Account, Empresa } from '../types';
+import { formatCurrency, formatDate } from './helpers';
+import { useStore } from '../store/useStore';
 
-const createDocument = (title: string) => {
+const getEmpresa = (): Empresa => useStore.getState().empresa;
+
+const BRAND = {
+  primary: [41, 66, 230] as [number, number, number], // primary-600
+  secondary: [5, 150, 105] as [number, number, number], // secondary-600
+  text: [15, 23, 42] as [number, number, number],
+  muted: [100, 116, 139] as [number, number, number],
+  zebra: [243, 244, 249] as [number, number, number],
+  grouperBg: [232, 236, 248] as [number, number, number],
+};
+
+const createDocument = (title: string): jsPDF => {
   const doc = new jsPDF();
-  const date = new Date().toLocaleDateString();
+  const empresa = getEmpresa();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('es-GT', { day: '2-digit', month: 'long', year: 'numeric' });
 
-  doc.setFontSize(18);
-  doc.text('Proyecto Contabilidad', 14, 20);
+  // Branded header band
+  doc.setFillColor(...BRAND.primary);
+  doc.rect(0, 0, 210, 18, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(empresa.razon_social, 14, 9);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`NIT: ${empresa.nit}    ${empresa.direccion}`, 14, 14);
+  doc.setFontSize(8);
+  doc.text(empresa.ciclo, 196, 9, { align: 'right' });
+  doc.text(`Período: ${formatDate(empresa.periodo_inicio)} – ${formatDate(empresa.periodo_fin)}`, 196, 14, { align: 'right' });
 
-  doc.setFontSize(14);
+  doc.setTextColor(...BRAND.text);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
   doc.text(title, 14, 30);
 
-  doc.setFontSize(10);
-  doc.text(`Fecha de generación: ${date}`, 14, 38);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BRAND.muted);
+  doc.text(`Generado: ${dateStr}`, 14, 36);
+  doc.text(`Hora: ${now.toLocaleTimeString('es-GT')}`, 196, 36, { align: 'right' });
 
   return doc;
 };
 
+const addFooter = (doc: jsPDF) => {
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND.muted);
+    doc.text(`Página ${i} de ${pages}`, 196, 290, { align: 'right' });
+    doc.text('Sistema Contable — Reporte oficial', 14, 290);
+  }
+};
+
+interface AutoTableLike { lastAutoTable?: { finalY: number } }
+
 export const exportLibroDiarioPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Libro Diario');
+  const validEntries = entries
+    .filter(e => e.estado === 'contabilizada' || e.estado === 'observada')
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime() || a.numero - b.numero);
 
-  const validEntries = entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').sort((a, b) => a.numero - b.numero);
-
-  const tableData: any[] = [];
-
+  const tableData: RowInput[] = [];
   validEntries.forEach(entry => {
-    // Header for the entry
     tableData.push([
-      `P${entry.numero}`,
-      entry.fecha,
-      entry.concepto,
-      '',
-      ''
+      { content: `P-${entry.numero}`, styles: { fontStyle: 'bold' } },
+      { content: formatDate(entry.fecha), styles: { fontStyle: 'bold' } },
+      { content: entry.concepto, styles: { fontStyle: 'bold' }, colSpan: 3 },
     ]);
-
-    // Lines
     entry.lineas.forEach(line => {
       const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
       tableData.push([
         '',
         line.cuenta_codigo,
-        acc ? acc.nombre : 'Cuenta Desconocida',
+        acc?.nombre ?? 'Cuenta desconocida',
         line.debe > 0 ? formatCurrency(line.debe) : '',
-        line.haber > 0 ? formatCurrency(line.haber) : ''
+        line.haber > 0 ? formatCurrency(line.haber) : '',
       ]);
     });
-
-    // Empty line to separate entries
-    tableData.push(['', '', '', '', '']);
   });
 
   autoTable(doc, {
-    startY: 45,
-    head: [['Partida', 'Fecha/Código', 'Concepto/Cuenta', 'Debe', 'Haber']],
+    startY: 40,
+    head: [['Partida', 'Fecha', 'Concepto / Cuenta', 'Debe', 'Haber']],
     body: tableData,
-    theme: 'grid',
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [63, 81, 181] },
+    theme: 'striped',
+    styles: { fontSize: 9, cellPadding: 2.5 },
+    headStyles: { fillColor: BRAND.primary, textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: BRAND.zebra },
     columnStyles: {
-      3: { halign: 'right' },
-      4: { halign: 'right' }
+      0: { cellWidth: 18 },
+      1: { cellWidth: 25 },
+      3: { halign: 'right', cellWidth: 28 },
+      4: { halign: 'right', cellWidth: 28 },
     },
-    didParseCell: function (data) {
-      const rawData = data.row.raw as any[];
-      if (data.row.index > -1 && rawData[0] !== '' && rawData[0].toString().startsWith('P')) {
+    didParseCell: (data: CellHookData) => {
+      const raw = data.row.raw as RowInput;
+      const first = Array.isArray(raw) ? raw[0] : undefined;
+      const isHeader = typeof first === 'object' && first !== null && 'styles' in first;
+      if (isHeader && data.section === 'body') {
+        data.cell.styles.fillColor = BRAND.grouperBg;
         data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [240, 240, 240];
       }
-    }
+    },
   });
 
+  addFooter(doc);
   doc.save('Libro_Diario.pdf');
 };
 
 export const exportLibroMayorPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Libro Mayor');
+  const validEntries = entries
+    .filter(e => e.estado === 'contabilizada' || e.estado === 'observada')
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime() || a.numero - b.numero);
 
-  const accountLedgers: Record<string, { fecha: string, concepto: string, debe: number, haber: number, saldo: number }[]> = {};
-
-  // Initialize
-  accounts.forEach(acc => {
-    accountLedgers[acc.codigo] = [];
-  });
-
-  const validEntries = entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-
+  const movsByAccount: Record<string, { fecha: string; partida: number; concepto: string; debe: number; haber: number }[]> = {};
   validEntries.forEach(entry => {
     entry.lineas.forEach(line => {
-      if (!accountLedgers[line.cuenta_codigo]) {
-        accountLedgers[line.cuenta_codigo] = [];
-      }
-      accountLedgers[line.cuenta_codigo].push({
+      if (!movsByAccount[line.cuenta_codigo]) movsByAccount[line.cuenta_codigo] = [];
+      movsByAccount[line.cuenta_codigo].push({
         fecha: entry.fecha,
+        partida: entry.numero,
         concepto: entry.concepto,
         debe: line.debe || 0,
         haber: line.haber || 0,
-        saldo: 0 // Will be calculated next
       });
     });
   });
 
-  let currentY = 45;
+  let currentY = 42;
+  const sortedAccounts = accounts
+    .filter(a => movsByAccount[a.codigo]?.length)
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
 
-  Object.entries(accountLedgers).forEach(([codigo, lines]) => {
-    if (lines.length === 0) return;
-
-    const acc = accounts.find(a => a.codigo === codigo);
-    if (!acc) return;
-
+  sortedAccounts.forEach(acc => {
+    const movs = movsByAccount[acc.codigo];
     if (currentY > 250) {
       doc.addPage();
       currentY = 20;
     }
-
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Cuenta: ${codigo} - ${acc.nombre}`, 14, currentY);
-    currentY += 5;
+    doc.setTextColor(...BRAND.primary);
+    doc.text(`${acc.codigo} — ${acc.nombre}`, 14, currentY);
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND.muted);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Naturaleza: ${acc.naturaleza}`, 196, currentY, { align: 'right' });
+    currentY += 4;
 
     let saldo = 0;
-    const tableData = lines.map(line => {
-      if (acc.naturaleza === 'Deudor') {
-        saldo += (line.debe - line.haber);
-      } else {
-        saldo += (line.haber - line.debe);
-      }
+    let totalDebe = 0;
+    let totalHaber = 0;
+    const body: RowInput[] = movs.map(m => {
+      const delta = acc.naturaleza === 'Deudor' ? m.debe - m.haber : m.haber - m.debe;
+      saldo += delta;
+      totalDebe += m.debe;
+      totalHaber += m.haber;
       return [
-        line.fecha,
-        line.concepto,
-        line.debe > 0 ? formatCurrency(line.debe) : '',
-        line.haber > 0 ? formatCurrency(line.haber) : '',
-        formatCurrency(saldo)
+        formatDate(m.fecha),
+        `P-${m.partida}`,
+        m.concepto.substring(0, 50),
+        m.debe > 0 ? formatCurrency(m.debe) : '',
+        m.haber > 0 ? formatCurrency(m.haber) : '',
+        formatCurrency(saldo),
       ];
     });
 
+    body.push([
+      { content: 'TOTALES', colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: formatCurrency(totalDebe), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: formatCurrency(totalHaber), styles: { fontStyle: 'bold', halign: 'right' } },
+      { content: formatCurrency(saldo), styles: { fontStyle: 'bold', halign: 'right', fillColor: BRAND.grouperBg } },
+    ]);
+
     autoTable(doc, {
       startY: currentY,
-      head: [['Fecha', 'Concepto', 'Debe', 'Haber', 'Saldo']],
-      body: tableData,
+      head: [['Fecha', 'Ref', 'Concepto', 'Debe', 'Haber', 'Saldo']],
+      body,
       theme: 'grid',
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [100, 100, 100] },
+      styles: { fontSize: 8, cellPadding: 1.8 },
+      headStyles: { fillColor: BRAND.muted, textColor: 255, fontSize: 8 },
       columnStyles: {
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right' }
+        0: { cellWidth: 22 },
+        1: { cellWidth: 14, halign: 'center' },
+        3: { halign: 'right', cellWidth: 25 },
+        4: { halign: 'right', cellWidth: 25 },
+        5: { halign: 'right', cellWidth: 25 },
       },
-      margin: { bottom: 20 }
+      margin: { bottom: 20 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 15;
+    currentY = (doc as unknown as AutoTableLike).lastAutoTable?.finalY ?? currentY;
+    currentY += 8;
   });
 
+  addFooter(doc);
   doc.save('Libro_Mayor.pdf');
 };
 
 export const exportBalanceSaldosPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Balance de Saldos');
-
-  const data: Record<string, { codigo: string, nombre: string, debe: number, haber: number }> = {};
+  const data: Record<string, { codigo: string; nombre: string; debe: number; haber: number; naturaleza: string }> = {};
 
   entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
     entry.lineas.forEach(line => {
       if (!data[line.cuenta_codigo]) {
         const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
         if (!acc) return;
-        data[line.cuenta_codigo] = {
-          codigo: acc.codigo,
-          nombre: acc.nombre,
-          debe: 0,
-          haber: 0,
-        };
+        data[line.cuenta_codigo] = { codigo: acc.codigo, nombre: acc.nombre, debe: 0, haber: 0, naturaleza: acc.naturaleza };
       }
       data[line.cuenta_codigo].debe += line.debe || 0;
       data[line.cuenta_codigo].haber += line.haber || 0;
@@ -181,233 +225,211 @@ export const exportBalanceSaldosPDF = (entries: JournalEntry[], accounts: Accoun
 
   let totalDeudor = 0;
   let totalAcreedor = 0;
+  let totalDebe = 0;
+  let totalHaber = 0;
+  const rows: RowInput[] = Object.values(data)
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
+    .map(item => {
+      let sd = 0;
+      let sa = 0;
+      if (item.naturaleza === 'Deudor') {
+        const s = item.debe - item.haber;
+        if (s >= 0) sd = s;
+        else sa = Math.abs(s);
+      } else {
+        const s = item.haber - item.debe;
+        if (s >= 0) sa = s;
+        else sd = Math.abs(s);
+      }
+      totalDeudor += sd;
+      totalAcreedor += sa;
+      totalDebe += item.debe;
+      totalHaber += item.haber;
+      return [
+        item.codigo,
+        item.nombre,
+        item.debe > 0 ? formatCurrency(item.debe) : '',
+        item.haber > 0 ? formatCurrency(item.haber) : '',
+        sd > 0 ? formatCurrency(sd) : '',
+        sa > 0 ? formatCurrency(sa) : '',
+      ];
+    });
 
-  const tableData = Object.values(data).map(item => {
-    const acc = accounts.find(a => a.codigo === item.codigo);
-    let saldoDeudor = 0;
-    let saldoAcreedor = 0;
-
-    if (acc?.naturaleza === 'Deudor') {
-      const saldo = item.debe - item.haber;
-      if (saldo >= 0) saldoDeudor = saldo;
-      else saldoAcreedor = Math.abs(saldo);
-    } else {
-      const saldo = item.haber - item.debe;
-      if (saldo >= 0) saldoAcreedor = saldo;
-      else saldoDeudor = Math.abs(saldo);
-    }
-
-    totalDeudor += saldoDeudor;
-    totalAcreedor += saldoAcreedor;
-
-    return [
-      item.codigo,
-      item.nombre,
-      saldoDeudor > 0 ? formatCurrency(saldoDeudor) : '',
-      saldoAcreedor > 0 ? formatCurrency(saldoAcreedor) : ''
-    ];
-  }).sort((a, b) => (a[0] as string).localeCompare(b[0] as string));
-
-  // Add totals row
-  tableData.push([
-    '',
-    'SUMAS IGUALES',
-    formatCurrency(totalDeudor),
-    formatCurrency(totalAcreedor)
-  ]);
+  rows.push([
+    { content: 'SUMAS IGUALES', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: formatCurrency(totalDebe), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: formatCurrency(totalHaber), styles: { fontStyle: 'bold', halign: 'right' } },
+    { content: formatCurrency(totalDeudor), styles: { fontStyle: 'bold', halign: 'right', fillColor: BRAND.grouperBg } },
+    { content: formatCurrency(totalAcreedor), styles: { fontStyle: 'bold', halign: 'right', fillColor: BRAND.grouperBg } },
+  ] as RowInput);
 
   autoTable(doc, {
-    startY: 45,
-    head: [['Código', 'Cuenta', 'Deudor', 'Acreedor']],
-    body: tableData,
-    theme: 'grid',
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [46, 125, 50] },
+    startY: 40,
+    head: [['Código', 'Cuenta', 'Mov. Debe', 'Mov. Haber', 'Saldo Deudor', 'Saldo Acreedor']],
+    body: rows,
+    theme: 'striped',
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: BRAND.secondary, textColor: 255 },
+    alternateRowStyles: { fillColor: BRAND.zebra },
     columnStyles: {
-      2: { halign: 'right' },
-      3: { halign: 'right' }
+      0: { cellWidth: 22 },
+      2: { halign: 'right', cellWidth: 25 },
+      3: { halign: 'right', cellWidth: 25 },
+      4: { halign: 'right', cellWidth: 28 },
+      5: { halign: 'right', cellWidth: 28 },
     },
-    didParseCell: function (data) {
-      if (data.row.index === tableData.length - 1) {
-        data.cell.styles.fontStyle = 'bold';
-        data.cell.styles.fillColor = [240, 255, 240];
-      }
-    }
   });
 
+  addFooter(doc);
   doc.save('Balance_Saldos.pdf');
 };
 
-export const exportEstadoResultadosPDF = (entries: JournalEntry[], accounts: Account[]) => {
-  const doc = createDocument('Estado de Resultados');
-
-  // Compute balances
+const computeBalanceMap = (entries: JournalEntry[], accounts: Account[]): Record<string, number> => {
   const balances: Record<string, number> = {};
   entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
     entry.lineas.forEach(line => {
       const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
       if (!acc) return;
       if (!balances[acc.codigo]) balances[acc.codigo] = 0;
-
-      if (acc.naturaleza === 'Deudor') {
-        balances[acc.codigo] += (line.debe - line.haber);
-      } else {
-        balances[acc.codigo] += (line.haber - line.debe);
-      }
+      const delta = acc.naturaleza === 'Deudor' ? line.debe - line.haber : line.haber - line.debe;
+      balances[acc.codigo] += delta;
     });
   });
+  return balances;
+};
+
+export const exportEstadoResultadosPDF = (entries: JournalEntry[], accounts: Account[]) => {
+  const doc = createDocument('Estado de Resultados');
+  const balances = computeBalanceMap(entries, accounts);
 
   let totalIngresos = 0;
   let totalCostos = 0;
   let totalGastos = 0;
+  const rows: RowInput[] = [];
 
-  const tableData: any[] = [];
-
-  // Ingresos (Type 'Ingreso', typically code starting with 4)
-  tableData.push(['INGRESOS', '']);
+  rows.push([{ content: 'INGRESOS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
   accounts.filter(a => a.codigo.startsWith('4') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalIngresos += balances[acc.codigo];
   });
-  tableData.push(['Total Ingresos', formatCurrency(totalIngresos)]);
-  tableData.push(['', '']);
+  rows.push([
+    { content: 'Total Ingresos', styles: { fontStyle: 'italic' } },
+    { content: formatCurrency(totalIngresos), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
-  // Costos (Type 'Costo', typically code starting with 5.1 or just 5 and naturally Deudor)
-  tableData.push(['COSTOS', '']);
+  rows.push([{ content: 'COSTO DE VENTAS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
   accounts.filter(a => a.codigo.startsWith('5.1') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalCostos += balances[acc.codigo];
   });
-  tableData.push(['Total Costos', formatCurrency(totalCostos)]);
+  rows.push([
+    { content: 'Total Costos', styles: { fontStyle: 'italic' } },
+    { content: formatCurrency(totalCostos), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
   const utilidadBruta = totalIngresos - totalCostos;
-  tableData.push(['Utilidad Bruta', formatCurrency(utilidadBruta)]);
-  tableData.push(['', '']);
+  rows.push([
+    { content: 'UTILIDAD BRUTA', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg } },
+    { content: formatCurrency(utilidadBruta), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.grouperBg } },
+  ]);
 
-  // Gastos (Type 'Gasto', typically code starting with 5.2 or 6)
-  tableData.push(['GASTOS', '']);
-  accounts.filter(a => a.codigo.startsWith('5.2') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+  rows.push([{ content: 'GASTOS OPERATIVOS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
+  accounts.filter(a => (a.codigo.startsWith('5.2') || a.codigo.startsWith('6')) && balances[a.codigo]).forEach(acc => {
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalGastos += balances[acc.codigo];
   });
-  tableData.push(['Total Gastos', formatCurrency(totalGastos)]);
-  tableData.push(['', '']);
+  rows.push([
+    { content: 'Total Gastos', styles: { fontStyle: 'italic' } },
+    { content: formatCurrency(totalGastos), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
   const utilidadNeta = utilidadBruta - totalGastos;
-  tableData.push(['UTILIDAD/PÉRDIDA DEL EJERCICIO', formatCurrency(utilidadNeta)]);
+  rows.push([
+    { content: utilidadNeta >= 0 ? 'UTILIDAD NETA DEL EJERCICIO' : 'PÉRDIDA NETA DEL EJERCICIO', styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+    { content: formatCurrency(utilidadNeta), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+  ]);
 
   autoTable(doc, {
-    startY: 45,
+    startY: 40,
     head: [['Concepto', 'Monto']],
-    body: tableData,
+    body: rows,
     theme: 'grid',
-    styles: { fontSize: 10 },
-    headStyles: { fillColor: [40, 53, 147] },
-    columnStyles: {
-      1: { halign: 'right' }
-    },
-    didParseCell: function (data) {
-      const rawData = data.row.raw as any[];
-      const text = rawData[0].toString();
-      if (text === 'INGRESOS' || text === 'COSTOS' || text === 'GASTOS' || text.startsWith('UTILIDAD')) {
-        data.cell.styles.fontStyle = 'bold';
-      }
-      if (text.startsWith('Total ') || text === 'Utilidad Bruta') {
-        data.cell.styles.fontStyle = 'italic';
-      }
-    }
+    styles: { fontSize: 10, cellPadding: 2.5 },
+    headStyles: { fillColor: BRAND.primary, textColor: 255 },
+    columnStyles: { 1: { halign: 'right', cellWidth: 50 } },
   });
 
+  addFooter(doc);
   doc.save('Estado_Resultados.pdf');
 };
 
 export const exportBalanceGeneralPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Balance General');
+  const balances = computeBalanceMap(entries, accounts);
 
-  // Compute balances
-  const balances: Record<string, number> = {};
-  entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
-    entry.lineas.forEach(line => {
-      const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
-      if (!acc) return;
-      if (!balances[acc.codigo]) balances[acc.codigo] = 0;
-
-      if (acc.naturaleza === 'Deudor') {
-        balances[acc.codigo] += (line.debe - line.haber);
-      } else {
-        balances[acc.codigo] += (line.haber - line.debe);
-      }
-    });
-  });
-
-  // Calculate Utilidad/Pérdida for Patrimonio
   let totalIngresos = 0;
   let totalCostosGastos = 0;
-  Object.keys(balances).forEach(codigo => {
-    if (codigo.startsWith('4')) totalIngresos += balances[codigo];
-    if (codigo.startsWith('5') || codigo.startsWith('6')) totalCostosGastos += balances[codigo];
+  Object.keys(balances).forEach(code => {
+    if (code.startsWith('4')) totalIngresos += balances[code];
+    if (code.startsWith('5') || code.startsWith('6')) totalCostosGastos += balances[code];
   });
   const resultadoEjercicio = totalIngresos - totalCostosGastos;
 
   let totalActivo = 0;
   let totalPasivo = 0;
   let totalPatrimonio = 0;
+  const rows: RowInput[] = [];
 
-  const tableData: any[] = [];
-
-  // Activos (1)
-  tableData.push(['ACTIVO', '']);
+  rows.push([{ content: 'ACTIVO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
   accounts.filter(a => a.codigo.startsWith('1') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalActivo += balances[acc.codigo];
   });
-  tableData.push(['Total Activo', formatCurrency(totalActivo)]);
-  tableData.push(['', '']);
+  rows.push([
+    { content: 'Total Activo', styles: { fontStyle: 'bold' } },
+    { content: formatCurrency(totalActivo), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
-  // Pasivos (2)
-  tableData.push(['PASIVO', '']);
+  rows.push([{ content: 'PASIVO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
   accounts.filter(a => a.codigo.startsWith('2') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalPasivo += balances[acc.codigo];
   });
-  tableData.push(['Total Pasivo', formatCurrency(totalPasivo)]);
-  tableData.push(['', '']);
+  rows.push([
+    { content: 'Total Pasivo', styles: { fontStyle: 'bold' } },
+    { content: formatCurrency(totalPasivo), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
-  // Patrimonio (3)
-  tableData.push(['PATRIMONIO', '']);
+  rows.push([{ content: 'PATRIMONIO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
   accounts.filter(a => a.codigo.startsWith('3') && balances[a.codigo]).forEach(acc => {
-    tableData.push([`  ${acc.nombre}`, formatCurrency(balances[acc.codigo])]);
+    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
     totalPatrimonio += balances[acc.codigo];
   });
-  tableData.push(['  Resultado del Ejercicio', formatCurrency(resultadoEjercicio)]);
+  rows.push([
+    `  Resultado del ejercicio`,
+    { content: formatCurrency(resultadoEjercicio), styles: { halign: 'right', fontStyle: 'italic' } },
+  ]);
   totalPatrimonio += resultadoEjercicio;
+  rows.push([
+    { content: 'Total Patrimonio', styles: { fontStyle: 'bold' } },
+    { content: formatCurrency(totalPatrimonio), styles: { halign: 'right', fontStyle: 'bold' } },
+  ]);
 
-  tableData.push(['Total Patrimonio', formatCurrency(totalPatrimonio)]);
-  tableData.push(['', '']);
-
-  tableData.push(['TOTAL PASIVO + PATRIMONIO', formatCurrency(totalPasivo + totalPatrimonio)]);
+  rows.push([
+    { content: 'TOTAL PASIVO + PATRIMONIO', styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+    { content: formatCurrency(totalPasivo + totalPatrimonio), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+  ]);
 
   autoTable(doc, {
-    startY: 45,
+    startY: 40,
     head: [['Concepto', 'Monto']],
-    body: tableData,
+    body: rows,
     theme: 'grid',
-    styles: { fontSize: 10 },
-    headStyles: { fillColor: [40, 53, 147] },
-    columnStyles: {
-      1: { halign: 'right' }
-    },
-    didParseCell: function (data) {
-      const rawData = data.row.raw as any[];
-      const text = rawData[0].toString();
-      if (text === 'ACTIVO' || text === 'PASIVO' || text === 'PATRIMONIO' || text.startsWith('TOTAL')) {
-        data.cell.styles.fontStyle = 'bold';
-      }
-      if (text.startsWith('Total ')) {
-        data.cell.styles.fontStyle = 'italic';
-      }
-    }
+    styles: { fontSize: 10, cellPadding: 2.5 },
+    headStyles: { fillColor: BRAND.primary, textColor: 255 },
+    columnStyles: { 1: { halign: 'right', cellWidth: 50 } },
   });
 
+  addFooter(doc);
   doc.save('Balance_General.pdf');
 };

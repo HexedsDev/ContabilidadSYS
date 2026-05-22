@@ -1,163 +1,205 @@
 import { useMemo } from 'react';
-import { useStore } from '../store/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { formatCurrency } from '../utils/helpers';
-import { Printer } from 'lucide-react';
+import { useStore, computeBalances } from '../store/useStore';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageHeader } from '../components/ui/PageHeader';
+import { formatCurrency } from '../utils/helpers';
+import { Printer, PieChart, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export function BalanceGeneral() {
-  const { entries, accounts } = useStore();
+  const entries = useStore(s => s.entries);
+  const accounts = useStore(s => s.accounts);
 
-  const { activos, pasivos, patrimonio, totalActivo, totalPasivo, totalPatrimonio, resultadoEjercicio } = useMemo(() => {
-    const balances: Record<string, number> = {};
-    entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
-      entry.lineas.forEach(line => {
-        const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
-        if (!acc) return;
-        if (!balances[acc.codigo]) balances[acc.codigo] = 0;
-        
-        if (acc.naturaleza === 'Deudor') {
-          balances[acc.codigo] += (line.debe - line.haber);
-        } else {
-          balances[acc.codigo] += (line.haber - line.debe);
-        }
-      });
-    });
-
-    let totalIngresos = 0;
-    let totalCostosGastos = 0;
-    Object.keys(balances).forEach(codigo => {
-      if (codigo.startsWith('4')) totalIngresos += balances[codigo];
-      if (codigo.startsWith('5') || codigo.startsWith('6')) totalCostosGastos += balances[codigo];
-    });
-    const resultadoEjercicio = totalIngresos - totalCostosGastos;
-
-    const activosList: { nombre: string, monto: number }[] = [];
-    const pasivosList: { nombre: string, monto: number }[] = [];
-    const patrimonioList: { nombre: string, monto: number }[] = [];
+  const data = useMemo(() => {
+    const balances = computeBalances(entries, accounts);
+    const activos: { codigo: string; nombre: string; monto: number }[] = [];
+    const pasivos: { codigo: string; nombre: string; monto: number }[] = [];
+    const patrimonio: { codigo: string; nombre: string; monto: number }[] = [];
 
     let totalActivo = 0;
     let totalPasivo = 0;
     let totalPatrimonio = 0;
+    let totalIngresos = 0;
+    let totalCostosGastos = 0;
 
-    accounts.forEach(acc => {
-      const balance = balances[acc.codigo];
-      if (!balance) return;
-
-      if (acc.codigo.startsWith('1')) {
-        activosList.push({ nombre: acc.nombre, monto: balance });
-        totalActivo += balance;
-      } else if (acc.codigo.startsWith('2')) {
-        pasivosList.push({ nombre: acc.nombre, monto: balance });
-        totalPasivo += balance;
-      } else if (acc.codigo.startsWith('3')) {
-        patrimonioList.push({ nombre: acc.nombre, monto: balance });
-        totalPatrimonio += balance;
+    for (const code in balances) {
+      const b = balances[code];
+      if (b.saldo === 0) continue;
+      if (code.startsWith('1')) {
+        activos.push({ codigo: code, nombre: b.nombre, monto: b.saldo });
+        totalActivo += b.saldo;
+      } else if (code.startsWith('2')) {
+        pasivos.push({ codigo: code, nombre: b.nombre, monto: b.saldo });
+        totalPasivo += b.saldo;
+      } else if (code.startsWith('3')) {
+        patrimonio.push({ codigo: code, nombre: b.nombre, monto: b.saldo });
+        totalPatrimonio += b.saldo;
+      } else if (code.startsWith('4')) {
+        totalIngresos += b.saldo;
+      } else if (code.startsWith('5') || code.startsWith('6')) {
+        totalCostosGastos += b.saldo;
       }
-    });
+    }
+    const resultadoEjercicio = totalIngresos - totalCostosGastos;
+    totalPatrimonio += resultadoEjercicio;
 
-    totalPatrimonio += resultadoEjercicio; // Add resultado to total
+    const sortByCode = (arr: typeof activos) =>
+      arr.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
 
-    return { 
-      activos: activosList, 
-      pasivos: pasivosList, 
-      patrimonio: patrimonioList, 
-      totalActivo, 
-      totalPasivo, 
-      totalPatrimonio, 
-      resultadoEjercicio 
+    return {
+      activos: sortByCode(activos),
+      pasivos: sortByCode(pasivos),
+      patrimonio: sortByCode(patrimonio),
+      totalActivo,
+      totalPasivo,
+      totalPatrimonio,
+      resultadoEjercicio,
     };
   }, [entries, accounts]);
 
+  const totalPasivoPatrimonio = data.totalPasivo + data.totalPatrimonio;
+  const diff = data.totalActivo - totalPasivoPatrimonio;
+  const isBalanced = Math.abs(diff) < 0.01;
+  const hasData = data.activos.length > 0 || data.pasivos.length > 0 || data.patrimonio.length > 0;
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-main">Balance General</h1>
-          <p className="text-text-muted mt-1">Situación financiera de la empresa.</p>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <PageHeader
+        title="Balance General"
+        description="Situación financiera al cierre del ciclo"
+        icon={PieChart}
+        actions={
+          <>
+            {hasData && (
+              <Badge variant={isBalanced ? 'success' : 'error'} dot>
+                {isBalanced ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                {isBalanced ? 'Ecuación cuadrada' : `Diferencia ${formatCurrency(Math.abs(diff))}`}
+              </Badge>
+            )}
+            <Button variant="outline" leftIcon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>
+              Imprimir
+            </Button>
+          </>
+        }
+      />
+
+      {!hasData ? (
+        <Card>
+          <CardContent className="py-2">
+            <EmptyState
+              icon={PieChart}
+              title="Sin datos"
+              description="Registra partidas para generar el balance general"
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* ACTIVO */}
+          <Card>
+            <SectionHeader title="Activo" tone="primary" />
+            <div className="divide-y divide-border-soft">
+              {data.activos.map(a => (
+                <Row key={a.codigo} codigo={a.codigo} nombre={a.nombre} monto={a.monto} />
+              ))}
+            </div>
+            <TotalRow label="Total Activo" value={data.totalActivo} tone="primary" highlight />
+          </Card>
+
+          {/* PASIVO + PATRIMONIO */}
+          <Card>
+            <SectionHeader title="Pasivo y Patrimonio" tone="warning" />
+
+            {data.pasivos.length > 0 && (
+              <>
+                <SubHeader title="Pasivos" />
+                <div className="divide-y divide-border-soft">
+                  {data.pasivos.map(a => (
+                    <Row key={a.codigo} codigo={a.codigo} nombre={a.nombre} monto={a.monto} />
+                  ))}
+                </div>
+                <TotalRow label="Total Pasivo" value={data.totalPasivo} tone="warning" />
+              </>
+            )}
+
+            <SubHeader title="Patrimonio" />
+            <div className="divide-y divide-border-soft">
+              {data.patrimonio.map(a => (
+                <Row key={a.codigo} codigo={a.codigo} nombre={a.nombre} monto={a.monto} />
+              ))}
+              {data.resultadoEjercicio !== 0 && (
+                <Row
+                  codigo="——"
+                  nombre="Resultado del ejercicio"
+                  monto={data.resultadoEjercicio}
+                  italic
+                />
+              )}
+            </div>
+            <TotalRow label="Total Patrimonio" value={data.totalPatrimonio} tone="info" />
+            <TotalRow label="Total Pasivo + Patrimonio" value={totalPasivoPatrimonio} tone="primary" highlight />
+          </Card>
         </div>
-        <Button variant="outline" onClick={() => window.print()}>
-          <Printer className="w-4 h-4 mr-2" /> Imprimir Balance
-        </Button>
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({ title, tone }: { title: string; tone: 'primary' | 'warning' }) {
+  const toneClass = tone === 'primary' ? 'bg-primary-700' : 'bg-warning';
+  return (
+    <div className={`px-5 py-3 ${toneClass} text-white`}>
+      <h2 className="text-sm font-bold uppercase tracking-widest">{title}</h2>
+    </div>
+  );
+}
+
+function SubHeader({ title }: { title: string }) {
+  return (
+    <div className="px-5 py-2 bg-surface-soft border-y border-border-soft">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-text-subtle">{title}</p>
+    </div>
+  );
+}
+
+function Row({ codigo, nombre, monto, italic }: { codigo: string; nombre: string; monto: number; italic?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between px-5 py-2.5 hover:bg-surface-soft/40 transition-colors ${italic ? 'italic' : ''}`}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="font-mono text-[10px] text-text-subtle w-14 shrink-0">{codigo}</span>
+        <span className="text-sm text-text-main truncate">{nombre}</span>
       </div>
+      <span className="text-sm font-medium tabular-nums text-text-main shrink-0 ml-3">{formatCurrency(monto)}</span>
+    </div>
+  );
+}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-center">BALANCE GENERAL</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-primary-50 text-primary-700">
-                <tr>
-                  <th className="p-4 font-semibold border-b border-border-soft">Concepto</th>
-                  <th className="p-4 font-semibold border-b border-border-soft text-right w-40">Monto</th>
-                  <th className="p-4 font-semibold border-b border-border-soft text-right w-40">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Activo */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">ACTIVO</td></tr>
-                {activos.map((item, i) => (
-                  <tr key={'a'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b-4 border-border-soft">
-                  <td className="p-4 pl-8 font-bold italic">Suma del Activo</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-bold text-primary-700">{formatCurrency(totalActivo)}</td>
-                </tr>
-
-                {/* Pasivo */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">PASIVO</td></tr>
-                {pasivos.map((item, i) => (
-                  <tr key={'p'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b-2 border-border-soft">
-                  <td className="p-4 pl-8 font-semibold italic">Suma del Pasivo</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-semibold text-text-main">{formatCurrency(totalPasivo)}</td>
-                </tr>
-                
-                {/* Patrimonio */}
-                <tr className="bg-surface"><td colSpan={3} className="p-4 font-bold">PATRIMONIO</td></tr>
-                {patrimonio.map((item, i) => (
-                  <tr key={'pat'+i} className="border-b border-border-soft/50 hover:bg-background">
-                    <td className="p-4 pl-8">{item.nombre}</td>
-                    <td className="p-4 text-right text-text-muted">{formatCurrency(item.monto)}</td>
-                    <td className="p-4 text-right"></td>
-                  </tr>
-                ))}
-                <tr className="border-b border-border-soft/50 hover:bg-background">
-                  <td className="p-4 pl-8">Resultado del Ejercicio</td>
-                  <td className="p-4 text-right text-text-muted">{formatCurrency(resultadoEjercicio)}</td>
-                  <td className="p-4 text-right"></td>
-                </tr>
-                <tr className="border-b-2 border-border-soft">
-                  <td className="p-4 pl-8 font-semibold italic">Suma del Patrimonio</td>
-                  <td className="p-4"></td>
-                  <td className="p-4 text-right font-semibold text-text-main">{formatCurrency(totalPatrimonio)}</td>
-                </tr>
-
-                {/* Pasivo + Patrimonio */}
-                <tr className="bg-primary-50 border-t border-border-soft">
-                  <td colSpan={2} className="p-4 font-bold text-primary-900 text-base">SUMA PASIVO + PATRIMONIO</td>
-                  <td className="p-4 text-right font-bold text-primary-900 text-base border-b-4 border-double border-primary-600">
-                    {formatCurrency(totalPasivo + totalPatrimonio)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+function TotalRow({
+  label,
+  value,
+  tone,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  tone: 'primary' | 'warning' | 'info';
+  highlight?: boolean;
+}) {
+  const toneColors = {
+    primary: 'text-primary-700 dark:text-primary-300',
+    warning: 'text-warning',
+    info: 'text-info',
+  };
+  return (
+    <div
+      className={`flex items-center justify-between px-5 py-3 border-t border-border-soft ${
+        highlight ? 'bg-primary-50 dark:bg-primary-100/10 border-t-2 border-primary-500/40' : 'bg-surface-soft'
+      }`}
+    >
+      <span className={`text-xs uppercase tracking-wider font-bold ${toneColors[tone]}`}>{label}</span>
+      <span className={`text-base font-bold tabular-nums ${toneColors[tone]}`}>{formatCurrency(value)}</span>
     </div>
   );
 }
