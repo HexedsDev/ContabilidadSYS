@@ -1,18 +1,22 @@
 import { useState } from 'react';
-import { Building2, Save } from 'lucide-react';
+import { Building2, Save, Bot, KeyRound, Sparkles } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Card, CardContent } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useToast } from '../components/ui/toast-context';
-import type { Empresa } from '../types';
+import { Badge } from '../components/ui/Badge';
+import type { AiSettings, Empresa } from '../types';
 
 export function Configuracion() {
   const empresa = useStore(s => s.empresa);
+  const aiSettings = useStore(s => s.aiSettings);
   const setEmpresa = useStore(s => s.setEmpresa);
+  const setAiSettings = useStore(s => s.setAiSettings);
   const toast = useToast();
   const [form, setForm] = useState<Empresa>(empresa);
+  const [aiForm, setAiForm] = useState<AiSettings>(aiSettings);
 
   const handleSave = () => {
     if (!form.razon_social.trim()) {
@@ -23,6 +27,18 @@ export function Configuracion() {
     toast.success('Configuración guardada', 'Se aplicará en reportes y encabezados');
   };
 
+  const handleSaveAi = () => {
+    if (aiForm.enabled && !aiForm.apiKey.trim()) {
+      toast.error('La API key es obligatoria cuando el asistente IA está activo');
+      return;
+    }
+    setAiSettings(aiForm);
+    toast.success(
+      'API de OpenAI guardada',
+      aiForm.enabled ? 'El asistente IA ya puede usarse' : 'La clave quedó guardada'
+    );
+  };
+
   const update = <K extends keyof Empresa>(key: K, value: Empresa[K]) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
@@ -30,7 +46,7 @@ export function Configuracion() {
     <div className="max-w-4xl mx-auto space-y-6">
       <PageHeader
         title="Configuración de la empresa"
-        description="Estos datos aparecen en los reportes PDF y en el encabezado del sistema"
+        description="Estos datos aparecen en los reportes PDF, en el encabezado del sistema y en el asistente de documentos"
         icon={Building2}
         actions={
           <Button leftIcon={<Save className="w-4 h-4" />} onClick={handleSave}>
@@ -115,6 +131,61 @@ export function Configuracion() {
               onChange={e => update('simbolo_moneda', e.target.value)}
               placeholder="Q"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-primary-600" />
+                <h2 className="text-sm font-semibold text-text-main">Asistente IA para documentos</h2>
+              </div>
+              <p className="text-sm text-text-muted mt-1">
+                Cuando lo actives, la pantalla de partidas puede leer un archivo y proponer un borrador contable.
+              </p>
+            </div>
+            <Badge variant={aiForm.enabled ? 'success' : 'default'} dot size="sm">
+              {aiForm.enabled ? 'Activo' : 'Desactivado'}
+            </Badge>
+          </div>
+
+          <label className="flex items-start gap-3 rounded-sm border border-border-soft bg-surface-soft/60 p-3">
+            <input
+              type="checkbox"
+              checked={aiForm.enabled}
+              onChange={e => setAiForm(prev => ({ ...prev, enabled: e.target.checked }))}
+              className="mt-1 h-4 w-4 rounded border-border-strong text-primary-600 focus:ring-primary-500"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-text-main">Habilitar análisis automático</span>
+              <span className="block text-xs text-text-muted mt-0.5">
+                El sistema usará OpenAI para leer documentos y completar un borrador de partida.
+              </span>
+            </span>
+          </label>
+
+          <Input
+            label="API key de OpenAI"
+            type="password"
+            value={aiForm.apiKey}
+            onChange={e => setAiForm(prev => ({ ...prev, apiKey: e.target.value }))}
+            placeholder="sk-..."
+            leftIcon={<KeyRound className="w-4 h-4" />}
+            hint="Se guarda en este navegador para usarla en el análisis de documentos."
+          />
+
+          <div className="flex justify-end">
+            <Button variant="outline" leftIcon={<Save className="w-4 h-4" />} onClick={handleSaveAi}>
+              Guardar cambios
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>La carga del documento se hace desde Registrar Partida.</span>
           </div>
         </CardContent>
       </Card>

@@ -99,7 +99,7 @@ export function PartidaApertura() {
     });
 
     toast.success('Partida de apertura registrada', `Capital: ${formatCurrency(capitalCalculado)}`);
-    navigate('/diario');
+    navigate('/app/diario');
   };
 
   return (

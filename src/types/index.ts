@@ -66,6 +66,38 @@ export interface Empresa {
   ciclo: string;          // e.g. "Ciclo Contable 2026"
 }
 
+export interface AiSettings {
+  enabled: boolean;
+  apiKey: string;
+}
+
+export type UserRole = 'super_admin' | 'contador';
+
+export interface User {
+  id: string;
+  nombre: string;
+  email: string;
+  password: string;
+  rol: UserRole;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface AuthState {
+  currentUser: User | null;
+  users: User[];
+  isAuthenticated: boolean;
+  hydrated: boolean;
+  login: (email: string, password: string) => { success: boolean; message: string };
+  logout: () => void;
+  createUser: (user: Omit<User, 'id' | 'creado_en'>) => { success: boolean; message: string };
+  deleteUser: (id: string) => { success: boolean; message: string };
+  updateUser: (
+    id: string,
+    updates: Partial<Omit<User, 'id' | 'creado_en'>>
+  ) => { success: boolean; message: string };
+}
+
 export interface DateRange {
   from: string | null;
   to: string | null;

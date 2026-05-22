@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
+import { Landing } from './pages/Landing';
+import { Login } from './pages/Login';
+import { AdminUsuarios } from './pages/AdminUsuarios';
 import { Layout } from './layouts/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { RegistrarPartida } from './pages/RegistrarPartida';
@@ -13,6 +16,8 @@ import { EstadoResultados } from './pages/EstadoResultados';
 import { BalanceGeneral } from './pages/BalanceGeneral';
 import { PartidaApertura } from './pages/PartidaApertura';
 import { Configuracion } from './pages/Configuracion';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuthStore } from './store/useAuthStore';
 import { useStore } from './store/useStore';
 import { ToastProvider } from './components/ui/Toast';
 
@@ -23,6 +28,37 @@ function App() {
   useEffect(() => {
     initializeStore();
   }, [initializeStore]);
+
+  useEffect(() => {
+    const markHydrated = () => {
+      if (!useAuthStore.getState().hydrated) {
+        useAuthStore.setState({ hydrated: true });
+      }
+    };
+
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      markHydrated();
+    });
+
+    if (useAuthStore.persist.hasHydrated()) {
+      markHydrated();
+    } else {
+      void Promise.resolve(useAuthStore.persist.rehydrate()).catch(() => {
+        markHydrated();
+      });
+    }
+
+    const fallbackTimer = window.setTimeout(() => {
+      if (!useAuthStore.persist.hasHydrated()) {
+        markHydrated();
+      }
+    }, 400);
+
+    return () => {
+      unsubscribe();
+      window.clearTimeout(fallbackTimer);
+    };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -44,19 +80,32 @@ function App() {
     <ToastProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="apertura" element={<PartidaApertura />} />
-            <Route path="registrar" element={<RegistrarPartida />} />
-            <Route path="diario" element={<LibroDiario />} />
-            <Route path="mayor" element={<LibroMayor />} />
-            <Route path="balance" element={<BalanceSaldos />} />
-            <Route path="catalogo" element={<CatalogoCuentas />} />
-            <Route path="auditoria" element={<Auditoria />} />
-            <Route path="resultados" element={<EstadoResultados />} />
-            <Route path="balance-general" element={<BalanceGeneral />} />
-            <Route path="reportes" element={<Reportes />} />
-            <Route path="configuracion" element={<Configuracion />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+
+          <Route element={<ProtectedRoute />}>
+            <Route path="/app" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="apertura" element={<PartidaApertura />} />
+              <Route path="registrar" element={<RegistrarPartida />} />
+              <Route path="diario" element={<LibroDiario />} />
+              <Route path="mayor" element={<LibroMayor />} />
+              <Route path="balance" element={<BalanceSaldos />} />
+              <Route path="catalogo" element={<CatalogoCuentas />} />
+              <Route path="auditoria" element={<Auditoria />} />
+              <Route path="resultados" element={<EstadoResultados />} />
+              <Route path="balance-general" element={<BalanceGeneral />} />
+              <Route path="reportes" element={<Reportes />} />
+              <Route path="configuracion" element={<Configuracion />} />
+              <Route
+                path="admin/usuarios"
+                element={
+                  <ProtectedRoute requiredRole="super_admin">
+                    <AdminUsuarios />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
           </Route>
         </Routes>
       </BrowserRouter>

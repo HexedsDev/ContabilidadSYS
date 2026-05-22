@@ -90,7 +90,7 @@ export function Dashboard() {
                 Cargar demo
               </Button>
             )}
-            <Button leftIcon={<BookCheck className="w-4 h-4" />} onClick={() => navigate('/registrar')}>
+            <Button leftIcon={<BookCheck className="w-4 h-4" />} onClick={() => navigate('/app/registrar')}>
               Nueva partida
             </Button>
           </>
@@ -161,7 +161,7 @@ export function Dashboard() {
               <CardTitle>Partidas recientes</CardTitle>
               <CardDescription>Últimos asientos registrados</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => navigate('/diario')}>
+            <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />} onClick={() => navigate('/app/diario')}>
               Ver libro diario
             </Button>
           </CardHeader>
@@ -176,7 +176,7 @@ export function Dashboard() {
                     <Button variant="outline" size="sm" leftIcon={<Sparkles className="w-4 h-4" />} onClick={handleLoadDemo}>
                       Cargar demo
                     </Button>
-                    <Button size="sm" onClick={() => navigate('/registrar')}>
+                    <Button size="sm" onClick={() => navigate('/app/registrar')}>
                       Nueva partida
                     </Button>
                   </div>
@@ -189,7 +189,7 @@ export function Dashboard() {
                   return (
                     <li key={entry.id}>
                       <button
-                        onClick={() => navigate('/registrar', { state: { entryId: entry.id } })}
+                        onClick={() => navigate('/app/registrar', { state: { entryId: entry.id } })}
                         className="w-full text-left grid grid-cols-[40px_1fr_auto_auto] items-center gap-3 px-2 py-3 rounded-sm hover:bg-surface-soft transition-colors"
                       >
                         <div className="w-10 h-10 rounded-sm bg-primary-50 text-primary-600 flex items-center justify-center font-mono text-xs font-bold shrink-0">

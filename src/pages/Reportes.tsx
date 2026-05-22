@@ -32,11 +32,12 @@ import { Panel, PanelStat } from '../components/ui/Panel';
 export function Reportes() {
   const entries = useStore(s => s.entries);
   const accounts = useStore(s => s.accounts);
+  const empresa = useStore(s => s.empresa);
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportJSON = () => {
-    const data = { entries, accounts, exportedAt: new Date().toISOString(), version: '2' };
+    const data = { entries, accounts, empresa, exportedAt: new Date().toISOString(), version: '2' };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -91,8 +92,8 @@ export function Reportes() {
       try {
         const text = reader.result as string;
         // Security: strict schema validation + prototype-pollution-safe parse
-        const { entries, accounts } = validateBackup(text);
-        useStore.setState({ entries, accounts });
+        const { entries, accounts, empresa } = validateBackup(text);
+        useStore.setState(empresa ? { entries, accounts, empresa } : { entries, accounts });
         toast.success('Respaldo importado', `${entries.length} partidas restauradas`);
       } catch (err) {
         toast.error('Error al importar', err instanceof Error ? err.message : 'Archivo inválido');

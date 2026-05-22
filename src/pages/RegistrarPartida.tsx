@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { Card, CardContent } from '../components/ui/Card';
@@ -17,24 +17,38 @@ import {
   Calendar,
   CheckCircle2,
   Scale,
+  Sparkles,
+  FileText,
+  Loader2,
+  Upload,
 } from 'lucide-react';
 import { SearchableSelect } from '../components/SearchableSelect';
 import type { EntryLine } from '../types';
 import { useToast } from '../components/ui/toast-context';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../components/ui/PageHeader';
+import {
+  analyzeDocumentWithOpenAI,
+  MAX_ANALYSIS_FILE_BYTES,
+  OPENAI_DEFAULT_MODEL,
+  type AIAnalysisDraft,
+  type AIAnalysisLine,
+} from '../utils/openaiDocumentAnalysis';
 
 type Line = Omit<EntryLine, 'id'>;
 
 export function RegistrarPartida() {
   const accounts = useStore(s => s.accounts);
   const entries = useStore(s => s.entries);
+  const empresa = useStore(s => s.empresa);
+  const aiSettings = useStore(s => s.aiSettings);
   const addEntry = useStore(s => s.addEntry);
   const updateEntry = useStore(s => s.updateEntry);
 
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const editId: string | undefined = location.state?.entryId;
   const entryToEdit = entries.find(e => e.id === editId);
@@ -51,6 +65,10 @@ export function RegistrarPartida() {
         ]
   );
   const [errors, setErrors] = useState<string[]>([]);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisSource, setAnalysisSource] = useState<string | null>(null);
+  const [analysisNote, setAnalysisNote] = useState<string | null>(null);
+  const [analysisText, setAnalysisText] = useState('');
 
   const detalleAccounts = useMemo(
     () => accounts.filter(a => a.permite_movimientos || a.tipo === 'Detalle'),
@@ -72,6 +90,7 @@ export function RegistrarPartida() {
   const diff = totalDebe - totalHaber;
   const isBalanced = Math.abs(diff) < 0.01;
   const hasAmounts = totalDebe > 0 || totalHaber > 0;
+  const aiEnabled = aiSettings.enabled && aiSettings.apiKey.trim().length > 0;
 
   const handleAddLine = () => {
     setLineas(prev => [...prev, { cuenta_codigo: '', debe: 0, haber: 0 }]);
@@ -101,6 +120,162 @@ export function RegistrarPartida() {
       next[index] = line;
       return next;
     });
+  };
+
+  const resolveDocumentAccount = (line: AIAnalysisLine): string | null => {
+    if (line.cuenta_codigo) {
+      const byCode = accounts.find(acc => acc.codigo === line.cuenta_codigo);
+      if (byCode) return byCode.codigo;
+    }
+    if (line.cuenta_nombre) {
+      const normalized = line.cuenta_nombre.trim().toLowerCase();
+      const byName = accounts.find(acc => acc.nombre.toLowerCase() === normalized);
+      if (byName) return byName.codigo;
+      const partial = accounts.filter(acc => acc.nombre.toLowerCase().includes(normalized));
+      if (partial.length === 1) return partial[0].codigo;
+    }
+    return null;
+  };
+
+  const normalizeAnalysisDraft = (draft: AIAnalysisDraft): Line[] => {
+    const resolved = draft.lineas
+      .map(line => {
+        const cuenta_codigo = resolveDocumentAccount(line);
+        if (!cuenta_codigo) return null;
+        const debe = Number(line.debe) || 0;
+        const haber = Number(line.haber) || 0;
+        if (debe <= 0 && haber <= 0) return null;
+        if (debe > 0 && haber > 0) return null;
+        return { cuenta_codigo, debe: Number(debe.toFixed(2)), haber: Number(haber.toFixed(2)) };
+      })
+      .filter((line): line is Line => line !== null);
+
+    if (resolved.length < 2) {
+      throw new Error('No se pudieron interpretar suficientes lineas contables');
+    }
+
+    const totalDebeResolved = resolved.reduce((sum, line) => sum + line.debe, 0);
+    const totalHaberResolved = resolved.reduce((sum, line) => sum + line.haber, 0);
+    const diffResolved = Number((totalDebeResolved - totalHaberResolved).toFixed(2));
+
+    if (Math.abs(diffResolved) > 0.01) {
+      const last = resolved[resolved.length - 1];
+      if (diffResolved > 0) {
+        last.haber = Number((last.haber + diffResolved).toFixed(2));
+      } else {
+        last.debe = Number((last.debe + Math.abs(diffResolved)).toFixed(2));
+      }
+    }
+
+    return resolved;
+  };
+
+  const handleAnalyzeDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!aiEnabled) {
+      toast.warning('Asistente IA desactivado', 'Activa la opcion en Configuracion para analizar documentos');
+      if (documentInputRef.current) documentInputRef.current.value = '';
+      return;
+    }
+    if (file.size > MAX_ANALYSIS_FILE_BYTES) {
+      toast.error('Archivo demasiado grande', `Maximo ${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB`);
+      if (documentInputRef.current) documentInputRef.current.value = '';
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisSource(file.name);
+    setAnalysisNote(null);
+
+    try {
+      const draft = await analyzeDocumentWithOpenAI({
+        file,
+        apiKey: aiSettings.apiKey,
+        accounts,
+        empresa,
+        model: OPENAI_DEFAULT_MODEL,
+      });
+
+      const resolvedLines = normalizeAnalysisDraft(draft);
+      const today = new Date().toISOString().split('T')[0];
+
+      setFecha(draft.fecha?.trim() || today);
+      setConcepto(draft.concepto?.trim() || `Documento analizado: ${file.name}`);
+      setObservaciones(
+        [draft.observaciones?.trim(), `Fuente: ${file.name}`, draft.confidence ? `Confianza: ${Math.round(draft.confidence * 100)}%` : null]
+          .filter(Boolean)
+          .join(' | ')
+      );
+      setLineas(
+        resolvedLines.map(line => ({
+          cuenta_codigo: line.cuenta_codigo,
+          debe: line.debe,
+          haber: line.haber,
+        }))
+      );
+      setAnalysisNote(`Se genero un borrador con ${resolvedLines.length} lineas. Revisa antes de contabilizar.`);
+      toast.success('Documento analizado', 'El borrador se completo automaticamente');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo analizar el documento';
+      setAnalysisNote(message);
+      toast.error('Error al analizar documento', message);
+    } finally {
+      setAnalysisLoading(false);
+      if (documentInputRef.current) documentInputRef.current.value = '';
+    }
+  };
+
+  const handleAnalyzeText = async () => {
+    if (!analysisText.trim()) {
+      toast.warning('Texto vacío', 'Escribe o pega el contenido del documento antes de enviar');
+      return;
+    }
+    if (!aiEnabled) return;
+
+    setAnalysisLoading(true);
+    setAnalysisSource('Texto escrito por el usuario');
+    setAnalysisNote(null);
+
+    try {
+      const draft = await analyzeDocumentWithOpenAI({
+        text: analysisText,
+        apiKey: aiSettings.apiKey,
+        accounts,
+        empresa,
+        model: OPENAI_DEFAULT_MODEL,
+      });
+
+      const resolvedLines = normalizeAnalysisDraft(draft);
+      const today = new Date().toISOString().split('T')[0];
+
+      setFecha(draft.fecha?.trim() || today);
+      setConcepto(draft.concepto?.trim() || 'Documento analizado desde texto');
+      setObservaciones(
+        [
+          draft.observaciones?.trim(),
+          'Fuente: texto ingresado manualmente',
+          draft.confidence ? `Confianza: ${Math.round(draft.confidence * 100)}%` : null,
+        ]
+          .filter(Boolean)
+          .join(' | ')
+      );
+      setLineas(
+        resolvedLines.map(line => ({
+          cuenta_codigo: line.cuenta_codigo,
+          debe: line.debe,
+          haber: line.haber,
+        }))
+      );
+      setAnalysisNote(`Se genero un borrador con ${resolvedLines.length} lineas. Revisa antes de contabilizar.`);
+      toast.success('Texto analizado', 'El borrador se completo automaticamente');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo analizar el texto';
+      setAnalysisNote(message);
+      toast.error('Error al analizar texto', message);
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   const handleSave = (estado: 'borrador' | 'contabilizada') => {
@@ -139,7 +314,7 @@ export function RegistrarPartida() {
     if (editId) {
       updateEntry(editId, { fecha, concepto, observaciones, estado, lineas: linesWithIds });
       toast.success('Partida actualizada', `#${entryToEdit?.numero} guardada como ${estado}`);
-      navigate('/diario');
+      navigate('/app/diario');
     } else {
       const newEntry = addEntry({ fecha, concepto, observaciones, estado, lineas: linesWithIds });
       toast.success(estado === 'contabilizada' ? 'Partida contabilizada' : 'Borrador guardado', `#${newEntry.numero} creada`);
@@ -187,6 +362,78 @@ export function RegistrarPartida() {
           </>
         }
       />
+
+      {aiEnabled && (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary-600" />
+                  <h2 className="text-sm font-semibold text-text-main">Analizar documento con IA</h2>
+                </div>
+                <p className="text-sm text-text-muted mt-1">
+                  Sube una factura, recibo o documento escaneado para que el sistema proponga un borrador de partida.
+                </p>
+              </div>
+              <Badge variant="success" dot size="sm">
+                IA activa
+              </Badge>
+            </div>
+
+            <input
+              ref={documentInputRef}
+              type="file"
+              accept="application/pdf,image/*,.txt,.md,.csv,.doc,.docx,.rtf,.html"
+              onChange={handleAnalyzeDocument}
+              className="hidden"
+            />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                onClick={() => documentInputRef.current?.click()}
+                disabled={analysisLoading}
+              >
+                {analysisLoading ? 'Analizando...' : 'Seleccionar documento'}
+              </Button>
+              <div className="text-xs text-text-muted">
+                Usa la clave configurada en <span className="font-medium text-text-main">Configuración</span>.
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Textarea
+                label="O pega texto del documento"
+                value={analysisText}
+                onChange={e => setAnalysisText(e.target.value)}
+                placeholder="Pega aquí el contenido del documento si no quieres subir un archivo..."
+                hint="Esta opción solo aparece cuando el asistente IA está activo."
+              />
+              <div className="flex justify-end">
+                <Button
+                  leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  onClick={handleAnalyzeText}
+                  disabled={analysisLoading || !analysisText.trim()}
+                >
+                  {analysisLoading ? 'Analizando...' : 'Enviar texto'}
+                </Button>
+              </div>
+            </div>
+
+            {analysisSource && (
+              <div className="rounded-sm border border-border-soft bg-surface-soft px-3 py-2 text-sm">
+                <div className="flex items-center gap-2 text-text-main font-medium">
+                  <FileText className="w-4 h-4 text-text-subtle" />
+                  <span>{analysisSource}</span>
+                </div>
+                {analysisNote && <p className="mt-1 text-xs text-text-muted">{analysisNote}</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="pt-6 space-y-6">

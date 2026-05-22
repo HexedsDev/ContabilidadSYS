@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Account, JournalEntry, AuditAlert, RawAccount, Empresa } from '../types';
+import type { Account, JournalEntry, AuditAlert, RawAccount, Empresa, AiSettings } from '../types';
 import rawAccounts from '../data/cat_cuentas.json';
 import { transformAccount, generateId } from '../utils/helpers';
 
@@ -19,11 +19,17 @@ const DEFAULT_EMPRESA: Empresa = {
   ciclo: 'Ciclo Contable 2026',
 };
 
+const DEFAULT_AI_SETTINGS: AiSettings = {
+  enabled: false,
+  apiKey: '',
+};
+
 interface AppState {
   accounts: Account[];
   entries: JournalEntry[];
   alerts: AuditAlert[];
   empresa: Empresa;
+  aiSettings: AiSettings;
   theme: ThemeMode;
   sidebarCollapsed: boolean;
 
@@ -40,6 +46,7 @@ interface AppState {
   addAccount: (account: Account) => void;
   deleteAccount: (codigo: string) => void;
   setEmpresa: (empresa: Partial<Empresa>) => void;
+  setAiSettings: (settings: Partial<AiSettings>) => void;
   setTheme: (theme: ThemeMode) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
@@ -177,6 +184,7 @@ export const useStore = create<AppState>()(
       entries: [],
       alerts: [],
       empresa: DEFAULT_EMPRESA,
+      aiSettings: DEFAULT_AI_SETTINGS,
       theme: 'light',
       sidebarCollapsed: false,
 
@@ -269,6 +277,10 @@ export const useStore = create<AppState>()(
         set(state => ({ empresa: { ...state.empresa, ...empresa } }));
       },
 
+      setAiSettings: (settings) => {
+        set(state => ({ aiSettings: { ...state.aiSettings, ...settings } }));
+      },
+
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
@@ -280,6 +292,7 @@ export const useStore = create<AppState>()(
         entries: state.entries,
         alerts: state.alerts,
         empresa: state.empresa,
+        aiSettings: state.aiSettings,
         theme: state.theme,
         sidebarCollapsed: state.sidebarCollapsed,
       }),

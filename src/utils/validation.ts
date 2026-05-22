@@ -1,4 +1,4 @@
-import type { Account, JournalEntry, EntryLine } from '../types';
+import type { Account, JournalEntry, EntryLine, Empresa } from '../types';
 
 /**
  * Security boundary for importing untrusted JSON backups.
@@ -38,12 +38,59 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 interface ValidationResult {
   accounts: Account[];
   entries: JournalEntry[];
+  empresa?: Empresa;
 }
 
 const VALID_ENTRY_STATUS = new Set(['borrador', 'contabilizada', 'observada', 'anulada']);
 const VALID_ACCOUNT_TYPES = new Set(['Agrupador', 'Detalle']);
 const VALID_NATURE = new Set(['Deudor', 'Acreedor']);
 const VALID_ACCOUNT_STATE = new Set(['activa', 'inactiva']);
+
+export const validateEmpresa = (raw: unknown): Empresa => {
+  if (!isPlainObject(raw)) throw new Error('empresa no es objeto');
+  const {
+    razon_social,
+    nit,
+    direccion,
+    telefono,
+    email,
+    moneda,
+    simbolo_moneda,
+    periodo_inicio,
+    periodo_fin,
+    ciclo,
+  } = raw;
+
+  if (!isString(razon_social, 200) || razon_social.trim().length === 0) {
+    throw new Error('empresa.razon_social inválido');
+  }
+  if (!isString(nit, 50)) throw new Error('empresa.nit inválido');
+  if (!isString(direccion, 300)) throw new Error('empresa.direccion inválido');
+  if (!isString(telefono, 50)) throw new Error('empresa.telefono inválido');
+  if (!isString(email, 200)) throw new Error('empresa.email inválido');
+  if (!isString(moneda, 20)) throw new Error('empresa.moneda inválido');
+  if (!isString(simbolo_moneda, 10)) throw new Error('empresa.simbolo_moneda inválido');
+  if (!isString(periodo_inicio, 10) || !/^\d{4}-\d{2}-\d{2}$/.test(periodo_inicio)) {
+    throw new Error('empresa.periodo_inicio inválido');
+  }
+  if (!isString(periodo_fin, 10) || !/^\d{4}-\d{2}-\d{2}$/.test(periodo_fin)) {
+    throw new Error('empresa.periodo_fin inválido');
+  }
+  if (!isString(ciclo, 100)) throw new Error('empresa.ciclo inválido');
+
+  return {
+    razon_social: razon_social.trim(),
+    nit: nit.trim(),
+    direccion: direccion.trim(),
+    telefono: telefono.trim(),
+    email: email.trim(),
+    moneda: moneda.trim(),
+    simbolo_moneda: simbolo_moneda.trim(),
+    periodo_inicio: periodo_inicio.trim(),
+    periodo_fin: periodo_fin.trim(),
+    ciclo: ciclo.trim(),
+  };
+};
 
 const validateAccount = (raw: unknown, idx: number): Account => {
   if (!isPlainObject(raw)) throw new Error(`accounts[${idx}] no es objeto`);
@@ -153,7 +200,7 @@ export const validateBackup = (text: string): ValidationResult => {
 
   if (!isPlainObject(raw)) throw new Error('La raíz debe ser un objeto');
 
-  const { accounts, entries } = raw;
+  const { accounts, entries, empresa } = raw;
 
   if (!Array.isArray(accounts)) throw new Error('Falta el array "accounts"');
   if (!Array.isArray(entries)) throw new Error('Falta el array "entries"');
@@ -166,6 +213,7 @@ export const validateBackup = (text: string): ValidationResult => {
 
   const validatedAccounts = accounts.map((a, i) => validateAccount(a, i));
   const validatedEntries = entries.map((e, i) => validateEntry(e, i));
+  const validatedEmpresa = empresa === undefined ? undefined : validateEmpresa(empresa);
 
   // Cross-check: every entry line must reference an existing account
   const codes = new Set(validatedAccounts.map(a => a.codigo));
@@ -177,5 +225,9 @@ export const validateBackup = (text: string): ValidationResult => {
     }
   }
 
-  return { accounts: validatedAccounts, entries: validatedEntries };
+  return {
+    accounts: validatedAccounts,
+    entries: validatedEntries,
+    ...(validatedEmpresa ? { empresa: validatedEmpresa } : {}),
+  };
 };

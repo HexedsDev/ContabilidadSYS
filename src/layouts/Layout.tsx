@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useState, useEffect, useMemo, type ElementType } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   BookPlus,
@@ -21,9 +21,12 @@ import {
   Database,
   Sparkles,
   Settings,
+  Users,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useStore, type ThemeMode } from '../store/useStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/toast-context';
@@ -31,34 +34,27 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface NavItem {
   to: string;
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   section?: string;
 }
 
-const navItems: NavItem[] = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', section: 'General' },
-  { to: '/apertura', icon: Calculator, label: 'Partida de Apertura', section: 'Operación' },
-  { to: '/registrar', icon: BookPlus, label: 'Registrar Partida', section: 'Operación' },
-  { to: '/diario', icon: BookText, label: 'Libro Diario', section: 'Libros' },
-  { to: '/mayor', icon: BookOpen, label: 'Libro Mayor', section: 'Libros' },
-  { to: '/balance', icon: Scale, label: 'Balance de Saldos', section: 'Estados' },
-  { to: '/resultados', icon: TrendingUp, label: 'Estado de Resultados', section: 'Estados' },
-  { to: '/balance-general', icon: PieChart, label: 'Balance General', section: 'Estados' },
-  { to: '/catalogo', icon: ListTree, label: 'Catálogo de Cuentas', section: 'Configuración' },
-  { to: '/auditoria', icon: ShieldAlert, label: 'Auditoría', section: 'Configuración' },
-  { to: '/reportes', icon: FileText, label: 'Exportar Reportes', section: 'Configuración' },
-  { to: '/configuracion', icon: Settings, label: 'Empresa', section: 'Configuración' },
+const baseNavItems: NavItem[] = [
+  { to: '/app', icon: LayoutDashboard, label: 'Dashboard', section: 'General' },
+  { to: '/app/apertura', icon: Calculator, label: 'Partida de Apertura', section: 'Operación' },
+  { to: '/app/registrar', icon: BookPlus, label: 'Registrar Partida', section: 'Operación' },
+  { to: '/app/diario', icon: BookText, label: 'Libro Diario', section: 'Libros' },
+  { to: '/app/mayor', icon: BookOpen, label: 'Libro Mayor', section: 'Libros' },
+  { to: '/app/balance', icon: Scale, label: 'Balance de Saldos', section: 'Estados' },
+  { to: '/app/resultados', icon: TrendingUp, label: 'Estado de Resultados', section: 'Estados' },
+  { to: '/app/balance-general', icon: PieChart, label: 'Balance General', section: 'Estados' },
+  { to: '/app/catalogo', icon: ListTree, label: 'Catálogo de Cuentas', section: 'Configuración' },
+  { to: '/app/auditoria', icon: ShieldAlert, label: 'Auditoría', section: 'Configuración' },
+  { to: '/app/reportes', icon: FileText, label: 'Exportar Reportes', section: 'Configuración' },
+  { to: '/app/configuracion', icon: Settings, label: 'Empresa', section: 'Configuración' },
 ];
 
-const groupedNav = navItems.reduce<Record<string, NavItem[]>>((acc, item) => {
-  const sec = item.section ?? 'Otros';
-  if (!acc[sec]) acc[sec] = [];
-  acc[sec].push(item);
-  return acc;
-}, {});
-
-const themeOptions: { value: ThemeMode; icon: React.ElementType; label: string }[] = [
+const themeOptions: { value: ThemeMode; icon: ElementType; label: string }[] = [
   { value: 'light', icon: Sun, label: 'Claro' },
   { value: 'dark', icon: Moon, label: 'Oscuro' },
   { value: 'system', icon: Monitor, label: 'Sistema' },
@@ -75,15 +71,38 @@ export function Layout() {
   const alerts = useStore(s => s.alerts);
   const empresa = useStore(s => s.empresa);
 
+  const currentUser = useAuthStore(s => s.currentUser);
+  const logout = useAuthStore(s => s.logout);
+
   const toast = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
 
   const activeAlertCount = alerts.filter(a => !a.resuelta).length;
+  const isSuperAdmin = currentUser?.rol === 'super_admin';
 
-  // Close overlays on route change — syncing to an external system (router)
+  const navItems = useMemo(() => {
+    if (!isSuperAdmin) return baseNavItems;
+    return [
+      ...baseNavItems,
+      { to: '/app/admin/usuarios', icon: Users, label: 'Gestión de Usuarios', section: 'Configuración' },
+    ];
+  }, [isSuperAdmin]);
+
+  const groupedNav = useMemo(
+    () =>
+      navItems.reduce<Record<string, NavItem[]>>((acc, item) => {
+        const section = item.section ?? 'Otros';
+        if (!acc[section]) acc[section] = [];
+        acc[section].push(item);
+        return acc;
+      }, {}),
+    [navItems]
+  );
+
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     setMobileOpen(false);
@@ -106,6 +125,12 @@ export function Layout() {
     toast.success('Datos de demo cargados', '10 partidas de ejemplo agregadas');
   };
 
+  const handleLogout = () => {
+    logout();
+    toast.success('Sesión cerrada');
+    navigate('/login', { replace: true });
+  };
+
   const renderNav = (sidebarCollapsed: boolean) => (
     <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
       {Object.entries(groupedNav).map(([section, items]) => (
@@ -120,7 +145,7 @@ export function Layout() {
               <li key={item.to}>
                 <NavLink
                   to={item.to}
-                  end={item.to === '/'}
+                  end={item.to === '/app'}
                   title={sidebarCollapsed ? item.label : undefined}
                   className={({ isActive }) =>
                     cn(
@@ -142,7 +167,7 @@ export function Layout() {
                       )}
                       <item.icon className="w-4.5 h-4.5 shrink-0" style={{ width: 18, height: 18 }} />
                       {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
-                      {!sidebarCollapsed && item.to === '/auditoria' && activeAlertCount > 0 && (
+                      {!sidebarCollapsed && item.to === '/app/auditoria' && activeAlertCount > 0 && (
                         <Badge variant="error" size="sm" className="ml-auto">
                           {activeAlertCount}
                         </Badge>
@@ -158,9 +183,89 @@ export function Layout() {
     </nav>
   );
 
+  const renderSidebarFooter = (sidebarCollapsed: boolean) => (
+    <div className="p-3 border-t border-border-soft space-y-2">
+      {currentUser && !sidebarCollapsed && (
+        <div className="rounded-sm border border-border-soft bg-surface-soft/70 p-3 space-y-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-sm bg-primary-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              {currentUser.nombre.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-text-main truncate">{currentUser.nombre}</p>
+              <p className="text-xs text-text-muted truncate">{currentUser.email}</p>
+            </div>
+          </div>
+          <Badge variant={currentUser.rol === 'super_admin' ? 'primary' : 'default'} size="sm">
+            {currentUser.rol === 'super_admin' ? 'Super Admin' : 'Contador'}
+          </Badge>
+        </div>
+      )}
+
+      {currentUser && sidebarCollapsed && (
+        <div className="flex justify-center pb-1">
+          <div className="w-9 h-9 rounded-sm bg-primary-600 text-white flex items-center justify-center font-bold text-sm" title={currentUser.nombre}>
+            {currentUser.nombre.slice(0, 2).toUpperCase()}
+          </div>
+        </div>
+      )}
+
+      {sidebarCollapsed ? (
+        <>
+          <button
+            onClick={handleLoadDemo}
+            title="Cargar demo"
+            className="w-full flex items-center justify-center px-0 py-2 rounded-sm text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:bg-secondary-50 dark:hover:bg-secondary-100/10 transition-colors"
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+          </button>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            title="Borrar datos"
+            className="w-full flex items-center justify-center px-0 py-2 rounded-sm text-sm font-medium text-error hover:bg-error-soft transition-colors"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" />
+          </button>
+          <button
+            onClick={handleLogout}
+            title="Cerrar sesión"
+            className="w-full flex items-center justify-center px-0 py-2 rounded-sm text-sm font-medium text-text-muted hover:bg-surface-soft hover:text-text-main transition-colors"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleLoadDemo}
+              className="min-w-0 flex items-center justify-center gap-2 px-2 py-2 rounded-sm text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:bg-secondary-50 dark:hover:bg-secondary-100/10 transition-colors"
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="truncate">Cargar demo</span>
+            </button>
+            <button
+              onClick={() => setConfirmOpen(true)}
+              className="min-w-0 flex items-center justify-center gap-2 px-2 py-2 rounded-sm text-sm font-medium text-error hover:bg-error-soft transition-colors"
+            >
+              <Trash2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">Borrar datos</span>
+            </button>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium text-text-muted hover:bg-surface-soft hover:text-text-main transition-colors"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>Cerrar sesión</span>
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex h-screen bg-background text-text-main overflow-hidden">
-      {/* Desktop sidebar */}
       <aside
         className={cn(
           'hidden md:flex bg-surface border-r border-border-soft flex-col transition-[width] duration-300 ease-out',
@@ -182,34 +287,9 @@ export function Layout() {
         </div>
 
         {renderNav(collapsed)}
-
-        <div className="p-3 border-t border-border-soft space-y-1">
-          <button
-            onClick={handleLoadDemo}
-            title={collapsed ? 'Cargar demo' : undefined}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:bg-secondary-50 dark:hover:bg-secondary-100/10 transition-colors',
-              collapsed && 'justify-center px-0'
-            )}
-          >
-            <Sparkles className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>Cargar demo</span>}
-          </button>
-          <button
-            onClick={() => setConfirmOpen(true)}
-            title={collapsed ? 'Borrar datos' : undefined}
-            className={cn(
-              'w-full flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium text-error hover:bg-error-soft transition-colors',
-              collapsed && 'justify-center px-0'
-            )}
-          >
-            <Trash2 className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>Borrar datos</span>}
-          </button>
-        </div>
+        {renderSidebarFooter(collapsed)}
       </aside>
 
-      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -237,12 +317,12 @@ export function Layout() {
                 </button>
               </div>
               {renderNav(false)}
+              {renderSidebarFooter(false)}
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main */}
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 bg-surface/80 backdrop-blur border-b border-border-soft flex items-center px-4 sm:px-6 justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -270,7 +350,6 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Theme switcher */}
             <div className="relative">
               <button
                 onClick={() => setThemeOpen(v => !v)}

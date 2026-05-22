@@ -121,7 +121,7 @@ export function LibroDiario() {
                 icon={BookText}
                 title="No hay partidas registradas"
                 description="Empieza creando una partida nueva o carga los datos de demo"
-                action={<Button onClick={() => navigate('/registrar')}>Nueva partida</Button>}
+                action={<Button onClick={() => navigate('/app/registrar')}>Nueva partida</Button>}
               />
             ) : (
               <EmptyState
@@ -174,7 +174,7 @@ export function LibroDiario() {
                           </Badge>
                         )}
                         <button
-                          onClick={() => navigate('/registrar', { state: { entryId: entry.id } })}
+                          onClick={() => navigate('/app/registrar', { state: { entryId: entry.id } })}
                           className="p-1.5 hover:bg-surface text-text-muted hover:text-primary-600 rounded-md transition-colors"
                           title="Editar"
                         >
