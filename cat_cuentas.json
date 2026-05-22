@@ -1,0 +1,961 @@
+[
+    {
+        "codigo": "1",
+        "nombre": "ACTIVO",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1",
+        "nombre": "ACTIVO CORRIENTE",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.01",
+        "nombre": "Caja",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.02",
+        "nombre": "Caja Chica",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.03",
+        "nombre": "Bancos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.04",
+        "nombre": "Inversiones a Corto Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.05",
+        "nombre": "Clientes",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.06",
+        "nombre": "Deudores No Comerciales",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.07",
+        "nombre": "Documentos por Cobrar",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.08",
+        "nombre": "Cuentas por Cobrar Empleados",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.09",
+        "nombre": "Anticipo a Proveedores",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.10",
+        "nombre": "IVA por Cobrar",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.11",
+        "nombre": "ISR Retenido por Acreditar",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.12",
+        "nombre": "ISO por Acreditar",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.13",
+        "nombre": "Inventario (o Mercaderías)",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.14",
+        "nombre": "Materia Prima",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.15",
+        "nombre": "Productos en Proceso",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.16",
+        "nombre": "Productos Terminados",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.17",
+        "nombre": "Material de Empaque",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.18",
+        "nombre": "Papelería y Útiles",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.19",
+        "nombre": "Repuestos y Accesorios",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.20",
+        "nombre": "Seguros Pagados por Anticipado",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.21",
+        "nombre": "Alquileres Pagados por Anticipado",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.1.22",
+        "nombre": "Publicidad Pagada por Anticipado",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2",
+        "nombre": "ACTIVO NO CORRIENTE",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.01",
+        "nombre": "Inmuebles (Terrenos y Edificios)",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.02",
+        "nombre": "Terrenos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.03",
+        "nombre": "Edificios",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.04",
+        "nombre": "Mobiliario y Equipo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.05",
+        "nombre": "Equipo de Computación",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.06",
+        "nombre": "Vehículos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.07",
+        "nombre": "Maquinaria",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.08",
+        "nombre": "Herramientas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.09",
+        "nombre": "Cristalería",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.10",
+        "nombre": "Marcas y Patentes",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.11",
+        "nombre": "Derecho de Llave",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.12",
+        "nombre": "Gastos de Organización",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.13",
+        "nombre": "Gastos de Instalación",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.14",
+        "nombre": "Inversiones a Largo Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.2.15",
+        "nombre": "Documentos por Cobrar a Largo Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3",
+        "nombre": "CUENTAS REGULARIZADORAS DE ACTIVO",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.01",
+        "nombre": "Depreciación Acumulada Edificios",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.02",
+        "nombre": "Depreciación Acumulada Mobiliario y Equipo",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.03",
+        "nombre": "Depreciación Acumulada Equipo de Computación",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.04",
+        "nombre": "Depreciación Acumulada Vehículos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.05",
+        "nombre": "Depreciación Acumulada Maquinaria",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.06",
+        "nombre": "Amortización Acumulada Gastos de Organización",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.07",
+        "nombre": "Amortización Acumulada Marcas y Patentes",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.08",
+        "nombre": "Reserva para Cuentas Incobrables",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2",
+        "nombre": "PASIVO",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1",
+        "nombre": "PASIVO CORRIENTE",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.01",
+        "nombre": "Proveedores",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.02",
+        "nombre": "Acreedores",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.03",
+        "nombre": "Cuentas por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.04",
+        "nombre": "Documentos por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.05",
+        "nombre": "IVA por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.06",
+        "nombre": "ISR por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.07",
+        "nombre": "IGSS por pagar laboral",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.08",
+        "nombre": "Retenciones Laborales por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.09",
+        "nombre": "IGSS por pagar patronal",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.10",
+        "nombre": "Prestaciones Laborales por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.11",
+        "nombre": "Préstamos Bancarios a Corto Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.12",
+        "nombre": "Anticipo de Clientes",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.13",
+        "nombre": "Intereses por Pagar",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.14",
+        "nombre": "Alquileres Cobrados por Anticipado",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.1.15",
+        "nombre": "Comisiones Cobradas por Anticipado",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2",
+        "nombre": "PASIVO NO CORRIENTE",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.01",
+        "nombre": "Préstamos Bancarios a Largo Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.02",
+        "nombre": "Documentos por Pagar a Largo Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.03",
+        "nombre": "Hipotecas / Acreedores Hipotecarios",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.04",
+        "nombre": "Bonos Emitidos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.05",
+        "nombre": "Reserva para Indemnizaciones",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "2.2.06",
+        "nombre": "Provisiones a Largo Plazo",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3",
+        "nombre": "PATRIMONIO NETO",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.01",
+        "nombre": "Capital Urrutia",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.02",
+        "nombre": "Capital Autorizado",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.03",
+        "nombre": "Acciones por Suscribir",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.04",
+        "nombre": "Suscriptores de Acciones",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.05",
+        "nombre": "Cuenta Personal / Retiros",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.06",
+        "nombre": "Reserva Legal",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.07",
+        "nombre": "Utilidades Retenidas / Ejercicios Anteriores",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.08",
+        "nombre": "Pérdidas Acumuladas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.09",
+        "nombre": "Utilidad del Ejercicio",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1.10",
+        "nombre": "Pérdida del Ejercicio",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "4",
+        "nombre": "INGRESOS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.1",
+        "nombre": "INGRESOS OPERATIVOS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.1.01",
+        "nombre": "Ventas",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.1.02",
+        "nombre": "Prestación de Servicios",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.1.03",
+        "nombre": "Devoluciones y Rebajas sobre Compras",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.1.04",
+        "nombre": "Descuentos sobre Compras",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2",
+        "nombre": "INGRESOS NO OPERATIVOS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.01",
+        "nombre": "Intereses Percibidos / Ganados",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.02",
+        "nombre": "Comisiones Percibidas",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.03",
+        "nombre": "Alquileres Cobrados / Percibidos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.04",
+        "nombre": "Ganancia en Venta de Activos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.05",
+        "nombre": "Ganancia en Negociación de Acciones",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.06",
+        "nombre": "Dividendos Percibidos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "4.2.07",
+        "nombre": "Otros Ingresos",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5",
+        "nombre": "GASTOS Y COSTOS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.1",
+        "nombre": "COSTO DE VENTAS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.1.01",
+        "nombre": "Compras",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.1.02",
+        "nombre": "Gastos sobre Compras",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.1.03",
+        "nombre": "Costo de Ventas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.1.04",
+        "nombre": "Devoluciones y Rebajas sobre Ventas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2",
+        "nombre": "GASTOS DE OPERACIÓN (ADMINISTRACIÓN Y VENTAS)",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.01",
+        "nombre": "Sueldos y Salarios",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.02",
+        "nombre": "Sueldos Administración",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.03",
+        "nombre": "Sueldos Sala de Ventas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.04",
+        "nombre": "Bonificación Incentivo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.05",
+        "nombre": "Cuota Patronal IGSS",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.06",
+        "nombre": "Aguinaldo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.07",
+        "nombre": "Bono 14",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.08",
+        "nombre": "Indemnizaciones",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.09",
+        "nombre": "Alquileres",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.10",
+        "nombre": "Energía Eléctrica",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.11",
+        "nombre": "Agua y Extracción de Basura",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.12",
+        "nombre": "Comunicaciones (Internet y Teléfono)",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.13",
+        "nombre": "Publicidad y Propaganda",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.14",
+        "nombre": "Seguros Pagados",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.15",
+        "nombre": "Papelería y Útiles Consumidos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.16",
+        "nombre": "Material de Empaque Consumido",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.17",
+        "nombre": "Combustibles y Lubricantes Consumidos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.18",
+        "nombre": "Mantenimiento y Reparación",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.19",
+        "nombre": "Honorarios Profesionales",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.20",
+        "nombre": "Depreciación Edificios",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.21",
+        "nombre": "Depreciación Mobiliario y Equipo",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.22",
+        "nombre": "Depreciación Equipo de Computación",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.23",
+        "nombre": "Depreciación Vehículos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.24",
+        "nombre": "Amortización Gastos de Organización",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.25",
+        "nombre": "Cuentas Incobrables / Cuentas Malas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3",
+        "nombre": "GASTOS NO OPERATIVOS",
+        "tipo": "Agrupador",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.01",
+        "nombre": "Intereses Gasto",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.02",
+        "nombre": "Comisiones Bancarias",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.03",
+        "nombre": "Pérdida en Venta de Activos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.04",
+        "nombre": "Multas y Recargos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.05",
+        "nombre": "Impuesto Sobre la Renta (Gasto)",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.3.06",
+        "nombre": "Otros Gastos",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    }
+]
