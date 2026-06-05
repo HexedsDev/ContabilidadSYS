@@ -1,8 +1,12 @@
 import type { Account, Empresa } from '../types';
 
-export const OPENAI_DEFAULT_MODEL = 'gpt-5.5';
+export const OPENAI_DEFAULT_MODEL = 'gpt-4o';
+// Por defecto se llama directamente a la API de OpenAI (funciona desde el navegador
+// con la API key del usuario). Si tienes un proxy backend propio, configura
+// VITE_OPENAI_API_URL para apuntar a él y ocultar la clave.
 export const OPENAI_API_URL =
-  (import.meta.env.VITE_OPENAI_API_URL as string | undefined)?.trim() || '/api/openai/v1/responses';
+  (import.meta.env.VITE_OPENAI_API_URL as string | undefined)?.trim() || 'https://api.openai.com/v1/responses';
+export const OPENAI_TIMEOUT_MS = 90_000;
 export const MAX_ANALYSIS_FILE_BYTES = 10 * 1024 * 1024;
 
 export interface AIAnalysisLine {
@@ -22,7 +26,7 @@ export interface AIAnalysisDraft {
 }
 
 const PRODUCTION_AI_ENDPOINT_MESSAGE =
-  'El analisis con IA necesita un endpoint backend en produccion. Configura VITE_OPENAI_API_URL o un proxy del servidor antes de usar esta opcion.';
+  'No se pudo contactar el servicio de OpenAI. Verifica tu API key, el modelo y tu conexión a internet. Si usas un proxy backend propio, revisa la variable VITE_OPENAI_API_URL.';
 
 const ANALYSIS_SCHEMA = {
   type: 'object',
@@ -53,14 +57,17 @@ const ANALYSIS_SCHEMA = {
 } as const;
 
 const SYSTEM_PROMPT = [
-  'Eres un asistente contable que analiza documentos y genera un borrador de partida.',
-  'Devuelve solo el contenido solicitado en formato JSON valido.',
-  'Usa exclusivamente cuentas del catalogo proporcionado.',
-  'Si el documento no muestra una fecha clara, devuelve una cadena vacia en fecha.',
-  'La partida sugerida debe quedar cuadrada.',
-  'Mantén el concepto corto y util para un libro diario.',
-  'Las observaciones pueden resumir el documento de forma breve.',
-].join(' ');
+  'Eres un contador experto en contabilidad de Guatemala (partida doble) que analiza documentos —facturas, recibos, fotos o texto— y genera un borrador de partida de diario.',
+  'Devuelve EXCLUSIVAMENTE JSON válido conforme al esquema solicitado, sin texto adicional ni explicaciones.',
+  'Usa únicamente cuentas del catálogo proporcionado, por código exacto, y prefiere cuentas de detalle (las que permiten movimientos).',
+  'Reglas contables de Guatemala que debes respetar:',
+  '- El IVA es 12%. Separa siempre la base del impuesto: en compras usa IVA por cobrar (crédito fiscal); en ventas usa IVA por pagar (débito fiscal).',
+  '- Las devoluciones sobre ventas reducen las ventas; las devoluciones sobre compras reducen las compras.',
+  '- La cuota patronal del IGSS es gasto de la empresa; la cuota laboral del IGSS se RETIENE al trabajador (es un pasivo por pagar, NO un gasto).',
+  '- La partida SIEMPRE debe quedar cuadrada: la suma del Debe es igual a la suma del Haber.',
+  'Si el documento no muestra una fecha clara, deja "fecha" como cadena vacía; cuando exista, usa formato YYYY-MM-DD.',
+  'Mantén el concepto corto y útil para un libro diario; las observaciones resumen el documento de forma breve.',
+].join('\n');
 
 const toBase64 = async (file: File): Promise<string> => {
   const buffer = await file.arrayBuffer();
@@ -178,21 +185,26 @@ export async function analyzeDocumentWithOpenAI(params: {
     '- Mantén observaciones breves y utiles para trazabilidad.',
   ].join('\n');
 
-  const inputContent = file
-    ? [
-        { type: 'input_text', text: prompt },
-        {
-          type: 'input_file',
-          filename: file.name,
-          file_data: await toDataUrl(file),
-        },
-      ]
-    : [
-        {
-          type: 'input_text',
-          text: `${prompt}\n\nTexto proporcionado por el usuario:\n${text?.trim() ?? ''}`,
-        },
-      ];
+  // La Responses API distingue imágenes (input_image) de documentos como PDF
+  // (input_file). Enviar una foto como input_file impide que el modelo la "vea".
+  const inputContent: Array<Record<string, unknown>> = [];
+  if (file) {
+    inputContent.push({ type: 'input_text', text: prompt });
+    if (file.type.startsWith('image/')) {
+      inputContent.push({ type: 'input_image', image_url: await toDataUrl(file), detail: 'high' });
+    } else {
+      inputContent.push({ type: 'input_file', filename: file.name, file_data: await toDataUrl(file) });
+    }
+  } else {
+    inputContent.push({
+      type: 'input_text',
+      text: `${prompt}\n\nTexto proporcionado por el usuario:\n${text?.trim() ?? ''}`,
+    });
+  }
+
+  // Timeout para que la solicitud nunca quede colgada (síntoma "se traba").
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -202,6 +214,7 @@ export async function analyzeDocumentWithOpenAI(params: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
         instructions: SYSTEM_PROMPT,
@@ -222,17 +235,41 @@ export async function analyzeDocumentWithOpenAI(params: {
       }),
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(
+        `La solicitud a OpenAI superó los ${OPENAI_TIMEOUT_MS / 1000}s y se canceló. Reintenta o usa una imagen/archivo más pequeño.`,
+        { cause: error }
+      );
+    }
     const message = error instanceof Error ? error.message : '';
     if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
-      throw new Error(PRODUCTION_AI_ENDPOINT_MESSAGE, {
-        cause: error,
-      });
+      throw new Error(PRODUCTION_AI_ENDPOINT_MESSAGE, { cause: error });
     }
     throw error;
+  } finally {
+    clearTimeout(timer);
   }
 
-  const payload = (await response.json()) as unknown;
+  // Lee el cuerpo como texto y luego intenta JSON: si el endpoint devolvió HTML
+  // (proxy mal configurado, 404), da un mensaje claro en vez de un error críptico.
+  const rawBody = await response.text();
+  let payload: unknown = {};
+  if (rawBody.trim()) {
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      if (response.ok) {
+        throw new Error('La respuesta de OpenAI no es JSON válido. Si usas un proxy, revisa VITE_OPENAI_API_URL.');
+      }
+    }
+  }
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('API key de OpenAI inválida o sin permisos. Revísala en Configuración → Asistente IA.');
+    }
+    if (response.status === 429) {
+      throw new Error('Límite de uso de OpenAI alcanzado (sin crédito o demasiadas solicitudes). Revisa tu cuenta.');
+    }
     if (response.status === 404 || response.status === 502 || response.status === 503) {
       throw new Error(PRODUCTION_AI_ENDPOINT_MESSAGE);
     }
