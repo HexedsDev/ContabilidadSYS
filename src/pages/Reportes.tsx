@@ -13,7 +13,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { useStore } from '../store/useStore';
+import { useStore, computeBalances } from '../store/useStore';
 import {
   exportLibroDiarioPDF,
   exportLibroMayorPDF,
@@ -24,7 +24,6 @@ import {
 import { PageHeader } from '../components/ui/PageHeader';
 import { useToast } from '../components/ui/toast-context';
 import { formatNumber, formatCurrency } from '../utils/helpers';
-import { computeBalances } from '../store/useStore';
 import { computeIVA } from '../utils/financial';
 import { validateBackup, MAX_IMPORT_BYTES } from '../utils/validation';
 import { Panel, PanelStat } from '../components/ui/Panel';

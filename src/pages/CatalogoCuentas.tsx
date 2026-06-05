@@ -233,13 +233,13 @@ export function CatalogoCuentas() {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setError(null); setNewAcc({ codigo: '', nombre: '', tipo: 'Detalle', naturaleza: 'Deudor' }); }}
         title="Nueva cuenta contable"
         description="Define el código jerárquico, nombre y propiedades"
         maxWidth="lg"
         footer={
           <>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button variant="outline" onClick={() => { setIsModalOpen(false); setError(null); setNewAcc({ codigo: '', nombre: '', tipo: 'Detalle', naturaleza: 'Deudor' }); }}>
               Cancelar
             </Button>
             <Button onClick={handleAddAccount}>Guardar cuenta</Button>

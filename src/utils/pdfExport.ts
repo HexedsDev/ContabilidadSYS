@@ -2,7 +2,8 @@ import jsPDF from 'jspdf';
 import autoTable, { type CellHookData, type RowInput } from 'jspdf-autotable';
 import type { JournalEntry, Account, Empresa } from '../types';
 import { formatCurrency, formatDate } from './helpers';
-import { useStore } from '../store/useStore';
+import { useStore, computeBalances } from '../store/useStore';
+import { computeEstadoResultados, computeBalanceGeneral, type LineItem } from './cierre';
 
 const getEmpresa = (): Empresa => useStore.getState().empresa;
 
@@ -284,69 +285,52 @@ export const exportBalanceSaldosPDF = (entries: JournalEntry[], accounts: Accoun
   doc.save('Balance_Saldos.pdf');
 };
 
-const computeBalanceMap = (entries: JournalEntry[], accounts: Account[]): Record<string, number> => {
-  const balances: Record<string, number> = {};
-  entries.filter(e => e.estado === 'contabilizada' || e.estado === 'observada').forEach(entry => {
-    entry.lineas.forEach(line => {
-      const acc = accounts.find(a => a.codigo === line.cuenta_codigo);
-      if (!acc) return;
-      if (!balances[acc.codigo]) balances[acc.codigo] = 0;
-      const delta = acc.naturaleza === 'Deudor' ? line.debe - line.haber : line.haber - line.debe;
-      balances[acc.codigo] += delta;
-    });
-  });
-  return balances;
-};
-
 export const exportEstadoResultadosPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Estado de Resultados');
-  const balances = computeBalanceMap(entries, accounts);
-
-  let totalIngresos = 0;
-  let totalCostos = 0;
-  let totalGastos = 0;
+  const rates = useStore.getState().cierreRates;
+  const er = computeEstadoResultados(computeBalances(entries, accounts), rates);
+  const pct = (r: number) => `${(r * 100).toFixed((r * 100) % 1 === 0 ? 0 : 2)}%`;
   const rows: RowInput[] = [];
 
-  rows.push([{ content: 'INGRESOS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => a.codigo.startsWith('4') && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalIngresos += balances[acc.codigo];
-  });
-  rows.push([
-    { content: 'Total Ingresos', styles: { fontStyle: 'italic' } },
-    { content: formatCurrency(totalIngresos), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
+  const line = (label: string, val: number, o: { bold?: boolean; fill?: boolean; sub?: boolean } = {}) =>
+    rows.push([
+      { content: label, styles: { fontStyle: o.bold ? 'bold' : 'normal', fillColor: o.fill ? BRAND.grouperBg : undefined } },
+      {
+        content: o.sub ? `(${formatCurrency(val)})` : formatCurrency(val),
+        styles: { halign: 'right', fontStyle: o.bold ? 'bold' : 'normal', fillColor: o.fill ? BRAND.grouperBg : undefined },
+      },
+    ]);
+  const head = (t: string) => rows.push([{ content: t, colSpan: 2, styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg } }]);
 
-  rows.push([{ content: 'COSTO DE VENTAS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => a.codigo.startsWith('5.1') && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalCostos += balances[acc.codigo];
-  });
-  rows.push([
-    { content: 'Total Costos', styles: { fontStyle: 'italic' } },
-    { content: formatCurrency(totalCostos), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
-
-  const utilidadBruta = totalIngresos - totalCostos;
+  line('Ventas', er.ventas);
+  if (er.devolucionesVentas) line('(−) Devoluciones y rebajas s/ventas', er.devolucionesVentas, { sub: true });
+  line('(=) Ventas netas', er.ventasNetas, { bold: true });
+  line('Compras', er.compras);
+  if (er.devolucionesCompras) line('(−) Devoluciones y rebajas s/compras', er.devolucionesCompras, { sub: true });
+  line('(=) Compras netas / Costo de ventas', er.comprasNetas, { bold: true, sub: true });
   rows.push([
     { content: 'UTILIDAD BRUTA', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg } },
-    { content: formatCurrency(utilidadBruta), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.grouperBg } },
+    { content: formatCurrency(er.utilidadBruta), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.grouperBg } },
   ]);
-
-  rows.push([{ content: 'GASTOS OPERATIVOS', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => (a.codigo.startsWith('5.2') || a.codigo.startsWith('6')) && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalGastos += balances[acc.codigo];
-  });
+  if (er.otrosIngresos.length) {
+    head('Otros ingresos');
+    er.otrosIngresos.forEach(i => line(`  ${i.nombre}`, i.monto));
+  }
+  head('Gastos de operación');
+  er.gastosOperacion.forEach(i => line(`  ${i.nombre}`, i.monto, { sub: true }));
+  line('Total gastos de operación', er.totalGastosOperacion, { bold: true, sub: true });
+  if (er.gastosNoOperativos.length) {
+    head('Gastos no operativos');
+    er.gastosNoOperativos.forEach(i => line(`  ${i.nombre}`, i.monto, { sub: true }));
+    line('Total gastos no operativos', er.totalGastosNoOperativos, { bold: true, sub: true });
+  }
+  line('Utilidad antes de impuestos', er.utilidadAntesISR, { bold: true });
+  line(`(−) ISR (${pct(rates.isr)})`, er.isr, { sub: true });
+  line('(=) Utilidad después de impuestos', er.utilidadDespuesISR, { bold: true });
+  line(`(−) Reserva Legal (${pct(rates.reservaLegal)})`, er.reservaLegal, { sub: true });
   rows.push([
-    { content: 'Total Gastos', styles: { fontStyle: 'italic' } },
-    { content: formatCurrency(totalGastos), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
-
-  const utilidadNeta = utilidadBruta - totalGastos;
-  rows.push([
-    { content: utilidadNeta >= 0 ? 'UTILIDAD NETA DEL EJERCICIO' : 'PÉRDIDA NETA DEL EJERCICIO', styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
-    { content: formatCurrency(utilidadNeta), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+    { content: er.gananciaEjercicio >= 0 ? 'GANANCIA DEL EJERCICIO' : 'PÉRDIDA DEL EJERCICIO', styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
+    { content: formatCurrency(er.gananciaEjercicio), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
   ]);
 
   autoTable(doc, {
@@ -365,60 +349,55 @@ export const exportEstadoResultadosPDF = (entries: JournalEntry[], accounts: Acc
 
 export const exportBalanceGeneralPDF = (entries: JournalEntry[], accounts: Account[]) => {
   const doc = createDocument('Balance General');
-  const balances = computeBalanceMap(entries, accounts);
-
-  let totalIngresos = 0;
-  let totalCostosGastos = 0;
-  Object.keys(balances).forEach(code => {
-    if (code.startsWith('4')) totalIngresos += balances[code];
-    if (code.startsWith('5') || code.startsWith('6')) totalCostosGastos += balances[code];
-  });
-  const resultadoEjercicio = totalIngresos - totalCostosGastos;
-
-  let totalActivo = 0;
-  let totalPasivo = 0;
-  let totalPatrimonio = 0;
+  const rates = useStore.getState().cierreRates;
+  const bg = computeBalanceGeneral(computeBalances(entries, accounts), rates);
   const rows: RowInput[] = [];
 
-  rows.push([{ content: 'ACTIVO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => a.codigo.startsWith('1') && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalActivo += balances[acc.codigo];
-  });
-  rows.push([
-    { content: 'Total Activo', styles: { fontStyle: 'bold' } },
-    { content: formatCurrency(totalActivo), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
+  const band = (t: string) => rows.push([{ content: t, colSpan: 2, styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } }]);
+  const sub = (t: string) => rows.push([{ content: t, colSpan: 2, styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg } }]);
+  const item = (it: LineItem) =>
+    rows.push([
+      { content: `  ${it.monto < 0 ? '(−) ' : ''}${it.nombre}` },
+      {
+        content: it.monto < 0 ? `(${formatCurrency(Math.abs(it.monto))})` : formatCurrency(it.monto),
+        styles: { halign: 'right' },
+      },
+    ]);
+  const total = (t: string, v: number, strong = false) =>
+    rows.push([
+      { content: t, styles: { fontStyle: 'bold', fillColor: strong ? BRAND.primary : undefined, textColor: strong ? 255 : undefined } },
+      { content: formatCurrency(v), styles: { halign: 'right', fontStyle: 'bold', fillColor: strong ? BRAND.primary : undefined, textColor: strong ? 255 : undefined } },
+    ]);
 
-  rows.push([{ content: 'PASIVO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => a.codigo.startsWith('2') && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalPasivo += balances[acc.codigo];
-  });
-  rows.push([
-    { content: 'Total Pasivo', styles: { fontStyle: 'bold' } },
-    { content: formatCurrency(totalPasivo), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
+  band('ACTIVO');
+  sub('Corriente');
+  [...bg.disponible, ...bg.exigible, ...bg.realizable, ...bg.diferido].forEach(item);
+  total('Total Activo Corriente', bg.totalCorriente);
+  if (bg.noCorriente.length) {
+    sub('No Corriente');
+    bg.noCorriente.forEach(item);
+    total('Total Activo No Corriente', bg.totalNoCorriente);
+  }
+  total('SUMA TOTAL DEL ACTIVO', bg.totalActivo, true);
 
-  rows.push([{ content: 'PATRIMONIO', styles: { fontStyle: 'bold', fillColor: BRAND.grouperBg }, colSpan: 2 }]);
-  accounts.filter(a => a.codigo.startsWith('3') && balances[a.codigo]).forEach(acc => {
-    rows.push([`  ${acc.nombre}`, { content: formatCurrency(balances[acc.codigo]), styles: { halign: 'right' } }]);
-    totalPatrimonio += balances[acc.codigo];
-  });
-  rows.push([
-    `  Resultado del ejercicio`,
-    { content: formatCurrency(resultadoEjercicio), styles: { halign: 'right', fontStyle: 'italic' } },
-  ]);
-  totalPatrimonio += resultadoEjercicio;
-  rows.push([
-    { content: 'Total Patrimonio', styles: { fontStyle: 'bold' } },
-    { content: formatCurrency(totalPatrimonio), styles: { halign: 'right', fontStyle: 'bold' } },
-  ]);
+  band('PASIVO');
+  sub('Corriente');
+  bg.pasivoCorriente.forEach(item);
+  if (bg.isrPorPagar > 0) item({ codigo: '2.1.06', nombre: 'ISR por Pagar', monto: bg.isrPorPagar });
+  total('Total Pasivo Corriente', bg.totalPasivoCorriente);
+  if (bg.pasivoNoCorriente.length) {
+    sub('No Corriente');
+    bg.pasivoNoCorriente.forEach(item);
+    total('Total Pasivo No Corriente', bg.totalPasivoNoCorriente);
+  }
+  total('TOTAL DEL PASIVO', bg.totalPasivo);
 
-  rows.push([
-    { content: 'TOTAL PASIVO + PATRIMONIO', styles: { fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
-    { content: formatCurrency(totalPasivo + totalPatrimonio), styles: { halign: 'right', fontStyle: 'bold', fillColor: BRAND.primary, textColor: 255 } },
-  ]);
+  band('PATRIMONIO');
+  bg.capital.forEach(item);
+  if (bg.reservaLegal) item({ codigo: '3.1.06', nombre: 'Reserva Legal', monto: bg.reservaLegal });
+  if (bg.gananciaEjercicio) item({ codigo: '3.1.09', nombre: 'Ganancia del Ejercicio', monto: bg.gananciaEjercicio });
+  total('Total del Patrimonio', bg.totalPatrimonio);
+  total('SUMA IGUAL AL ACTIVO', bg.totalPasivoPatrimonio, true);
 
   autoTable(doc, {
     startY: 40,

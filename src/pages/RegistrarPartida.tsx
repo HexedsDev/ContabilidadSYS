@@ -328,17 +328,20 @@ export function RegistrarPartida() {
     }
   };
 
-  // Keyboard shortcut: Ctrl/Cmd+Enter to post
+  // Keep a stable ref to the latest handleSave so the keydown listener
+  // (registered once) always calls the current version, not a stale closure.
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => { handleSaveRef.current = handleSave; });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        handleSave('contabilizada');
+        handleSaveRef.current('contabilizada');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const nextNumber = editId ? entryToEdit?.numero : (entries.length > 0 ? Math.max(...entries.map(e => e.numero)) + 1 : 1);

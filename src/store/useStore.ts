@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { Account, JournalEntry, AuditAlert, RawAccount, Empresa, AiSettings } from '../types';
 import rawAccounts from '../data/cat_cuentas.json';
 import { transformAccount, generateId } from '../utils/helpers';
+import { DEFAULT_CIERRE_RATES, type CierreRates } from '../utils/cierre';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -32,6 +33,7 @@ interface AppState {
   aiSettings: AiSettings;
   theme: ThemeMode;
   sidebarCollapsed: boolean;
+  cierreRates: CierreRates;
 
   initializeStore: () => void;
   loadFakeData: () => void;
@@ -50,6 +52,7 @@ interface AppState {
   setTheme: (theme: ThemeMode) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
+  setCierreRates: (rates: Partial<CierreRates>) => void;
 }
 
 const FAKE_ENTRIES: Omit<JournalEntry, 'id' | 'numero' | 'creada_en' | 'actualizada_en'>[] = [
@@ -147,29 +150,28 @@ const FAKE_ENTRIES: Omit<JournalEntry, 'id' | 'numero' | 'creada_en' | 'actualiz
   },
   {
     fecha: '2026-04-25',
-    concepto: 'Devolución sobre venta',
+    concepto: 'Devolución sobre compras',
     estado: 'contabilizada',
-    observaciones: 'Devolución de mercadería vendida',
+    observaciones: 'Devuelve mercadería comprada (contra-costo 4.1.03 y reversa IVA crédito)',
     lineas: [
-      { id: 'l29', cuenta_codigo: '5.1.04', debe: 3928.57, haber: 0 },
-      { id: 'l30', cuenta_codigo: '2.1.05', debe: 471.43, haber: 0 },
-      { id: 'l31', cuenta_codigo: '1.1.01', debe: 0, haber: 4400.0 },
+      { id: 'l29', cuenta_codigo: '1.1.01', debe: 4400.0, haber: 0 },
+      { id: 'l30', cuenta_codigo: '4.1.03', debe: 0, haber: 3928.57 },
+      { id: 'l31', cuenta_codigo: '1.1.10', debe: 0, haber: 471.43 },
     ],
   },
   {
     fecha: '2026-04-28',
     concepto: 'Pago sueldos ventas y administración',
     estado: 'contabilizada',
-    observaciones: 'Incluye IGSS por pagar patronal e IGSS por pagar laboral',
+    observaciones: 'Cuota patronal IGSS es gasto; cuota laboral IGSS (338.10) se retiene al trabajador',
     lineas: [
       { id: 'l32', cuenta_codigo: '5.2.02', debe: 3000.0, haber: 0 },
       { id: 'l33', cuenta_codigo: '5.2.03', debe: 4000.0, haber: 0 },
       { id: 'l34', cuenta_codigo: '5.2.04', debe: 500.0, haber: 0 },
       { id: 'l35', cuenta_codigo: '5.2.05', debe: 886.9, haber: 0 },
-      { id: 'l36', cuenta_codigo: '5.2.50', debe: 338.1, haber: 0 },
+      { id: 'l36', cuenta_codigo: '2.1.09', debe: 0, haber: 886.9 },
       { id: 'l37', cuenta_codigo: '2.1.07', debe: 0, haber: 338.1 },
-      { id: 'l38', cuenta_codigo: '2.1.09', debe: 0, haber: 886.9 },
-      { id: 'l39', cuenta_codigo: '1.1.01', debe: 0, haber: 7500.0 },
+      { id: 'l38', cuenta_codigo: '1.1.01', debe: 0, haber: 7161.9 },
     ],
   },
 ];
@@ -187,6 +189,7 @@ export const useStore = create<AppState>()(
       aiSettings: DEFAULT_AI_SETTINGS,
       theme: 'light',
       sidebarCollapsed: false,
+      cierreRates: DEFAULT_CIERRE_RATES,
 
       initializeStore: () => {
         if (get().accounts.length === 0) {
@@ -281,6 +284,10 @@ export const useStore = create<AppState>()(
         set(state => ({ aiSettings: { ...state.aiSettings, ...settings } }));
       },
 
+      setCierreRates: (rates) => {
+        set(state => ({ cierreRates: { ...state.cierreRates, ...rates } }));
+      },
+
       setTheme: (theme) => set({ theme }),
       toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
@@ -295,6 +302,7 @@ export const useStore = create<AppState>()(
         aiSettings: state.aiSettings,
         theme: state.theme,
         sidebarCollapsed: state.sidebarCollapsed,
+        cierreRates: state.cierreRates,
       }),
     }
   )

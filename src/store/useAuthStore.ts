@@ -200,7 +200,9 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => state => {
         if (!state) return;
         const seededUsers = seedUsers();
-        const users = [...seededUsers, ...(state.users ?? [])].reduce<User[]>((acc, user) => {
+        // Persisted users come FIRST so their data (e.g. changed passwords) takes precedence.
+        // Seeded users are added only when no persisted user shares the same id/email.
+        const users = [...(state.users ?? []), ...seededUsers].reduce<User[]>((acc, user) => {
           const exists = acc.some(item => item.id === user.id || item.email === user.email);
           if (!exists) acc.push(user);
           return acc;

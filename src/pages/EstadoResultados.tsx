@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useStore, computeBalances, filterByDateRange } from '../store/useStore';
+import { computeEstadoResultados } from '../utils/cierre';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -11,75 +12,35 @@ import { formatCurrency } from '../utils/helpers';
 import { Printer, TrendingUp, TrendingDown } from 'lucide-react';
 import type { DateRange } from '../types';
 
-interface Item {
-  codigo: string;
-  nombre: string;
-  monto: number;
-}
-
 export function EstadoResultados() {
   const entries = useStore(s => s.entries);
   const accounts = useStore(s => s.accounts);
+  const cierreRates = useStore(s => s.cierreRates);
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
-  const data = useMemo(() => {
+  const er = useMemo(() => {
     const filtered = filterByDateRange(entries, dateRange.from, dateRange.to);
     const balances = computeBalances(filtered, accounts);
-    const ingresos: Item[] = [];
-    const costos: Item[] = [];
-    const gastos: Item[] = [];
-    let totalIngresos = 0;
-    let totalCostos = 0;
-    let totalGastos = 0;
+    return computeEstadoResultados(balances, cierreRates);
+  }, [entries, accounts, dateRange, cierreRates]);
 
-    for (const code in balances) {
-      const b = balances[code];
-      if (b.saldo === 0) continue;
-      const item = { codigo: code, nombre: b.nombre, monto: b.saldo };
-      if (code.startsWith('4')) {
-        ingresos.push(item);
-        totalIngresos += b.saldo;
-      } else if (code.startsWith('5.1')) {
-        costos.push(item);
-        totalCostos += b.saldo;
-      } else if (code.startsWith('5.2') || code.startsWith('6')) {
-        gastos.push(item);
-        totalGastos += b.saldo;
-      }
-    }
-
-    const sortByCode = (arr: Item[]) =>
-      arr.sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
-
-    return {
-      ingresos: sortByCode(ingresos),
-      costos: sortByCode(costos),
-      gastos: sortByCode(gastos),
-      totalIngresos,
-      totalCostos,
-      totalGastos,
-    };
-  }, [entries, accounts, dateRange]);
-
-  const utilidadBruta = data.totalIngresos - data.totalCostos;
-  const utilidadNeta = utilidadBruta - data.totalGastos;
-  const margenBruto = data.totalIngresos > 0 ? (utilidadBruta / data.totalIngresos) * 100 : 0;
-  const margenNeto = data.totalIngresos > 0 ? (utilidadNeta / data.totalIngresos) * 100 : 0;
-  const hasData = data.ingresos.length + data.costos.length + data.gastos.length > 0;
-  const isProfit = utilidadNeta >= 0;
+  const hasData =
+    er.ventas !== 0 || er.costoVentas !== 0 || er.totalGastosOperacion !== 0 || er.totalOtrosIngresos !== 0;
+  const isProfit = er.gananciaEjercicio >= 0;
+  const pct = (r: number) => `${(r * 100).toFixed(r * 100 % 1 === 0 ? 0 : 2)}%`;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="Estado de Resultados"
-        description="Ingresos, costos y gastos del periodo"
+        description="Ventas netas, costo, utilidad bruta, ISR y reserva legal"
         icon={TrendingUp}
         actions={
           <>
             <DateRangeFilter value={dateRange} onChange={setDateRange} />
             {hasData && (
               <Badge variant={isProfit ? 'success' : 'error'} dot>
-                {isProfit ? 'Utilidad' : 'Pérdida'}: {formatCurrency(utilidadNeta)}
+                {isProfit ? 'Ganancia' : 'Pérdida'}: {formatCurrency(er.gananciaEjercicio)}
               </Badge>
             )}
             <Button variant="outline" leftIcon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>
@@ -95,57 +56,85 @@ export function EstadoResultados() {
             <EmptyState
               icon={TrendingUp}
               title="Sin datos"
-              description="Registra ingresos y gastos para generar el estado de resultados"
+              description="Registra ventas, compras y gastos para generar el estado de resultados"
             />
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Card className="lg:col-span-2">
-            <Section
-              title="Ingresos"
-              tone="success"
-              items={data.ingresos}
-              total={data.totalIngresos}
-              totalLabel="Total Ingresos"
+          <Card className="lg:col-span-2 overflow-hidden">
+            {/* Ventas netas */}
+            <Group title="Ingresos por ventas" />
+            <Line label="Ventas" value={er.ventas} />
+            {er.devolucionesVentas !== 0 && (
+              <Line label="(−) Devoluciones y rebajas s/ventas" value={er.devolucionesVentas} subtract muted />
+            )}
+            <Subtotal label="(=) Ventas netas" value={er.ventasNetas} />
+
+            {/* Costo */}
+            <Group title="Costo de ventas" />
+            <Line label="Compras" value={er.compras} />
+            {er.devolucionesCompras !== 0 && (
+              <Line label="(−) Devoluciones y rebajas s/compras" value={er.devolucionesCompras} subtract muted />
+            )}
+            <Subtotal label="(=) Compras netas / Costo de ventas" value={er.comprasNetas} subtract />
+
+            <BigTotal label="UTILIDAD BRUTA" value={er.utilidadBruta} tone="primary" />
+
+            {/* Otros ingresos */}
+            {er.otrosIngresos.length > 0 && (
+              <>
+                <Group title="Otros ingresos" />
+                {er.otrosIngresos.map(i => (
+                  <Line key={i.codigo} label={i.nombre} codigo={i.codigo} value={i.monto} />
+                ))}
+                <Subtotal label="Total otros ingresos" value={er.totalOtrosIngresos} />
+              </>
+            )}
+
+            {/* Gastos de operación */}
+            <Group title="Gastos de operación" />
+            {er.gastosOperacion.map(i => (
+              <Line key={i.codigo} label={i.nombre} codigo={i.codigo} value={i.monto} subtract muted />
+            ))}
+            <Subtotal label="Total gastos de operación" value={er.totalGastosOperacion} subtract />
+
+            {/* Gastos no operativos */}
+            {er.gastosNoOperativos.length > 0 && (
+              <>
+                <Group title="Gastos no operativos" />
+                {er.gastosNoOperativos.map(i => (
+                  <Line key={i.codigo} label={i.nombre} codigo={i.codigo} value={i.monto} subtract muted />
+                ))}
+                <Subtotal label="Total gastos no operativos" value={er.totalGastosNoOperativos} subtract />
+              </>
+            )}
+
+            <BigTotal label="Utilidad antes de impuestos" value={er.utilidadAntesISR} tone="primary" />
+            <Line label={`(−) ISR (${pct(cierreRates.isr)})`} value={er.isr} subtract muted />
+            <Subtotal label="(=) Utilidad después de impuestos" value={er.utilidadDespuesISR} />
+            <Line label={`(−) Reserva Legal (${pct(cierreRates.reservaLegal)})`} value={er.reservaLegal} subtract muted />
+
+            <BigTotal
+              label={isProfit ? 'GANANCIA DEL EJERCICIO' : 'PÉRDIDA DEL EJERCICIO'}
+              value={er.gananciaEjercicio}
+              tone={isProfit ? 'success' : 'error'}
+              highlight
             />
-
-            <Section
-              title="Costo de Ventas"
-              tone="warning"
-              items={data.costos}
-              total={data.totalCostos}
-              totalLabel="Total Costos"
-              negative
-            />
-
-            <BigTotal label="Utilidad Bruta" value={utilidadBruta} tone="primary" />
-
-            <Section
-              title="Gastos Operativos"
-              tone="error"
-              items={data.gastos}
-              total={data.totalGastos}
-              totalLabel="Total Gastos"
-              negative
-            />
-
-            <BigTotal label={isProfit ? 'Utilidad Neta del Ejercicio' : 'Pérdida Neta del Ejercicio'} value={utilidadNeta} tone={isProfit ? 'success' : 'error'} highlight />
           </Card>
 
           {/* Sidebar resumen */}
           <div className="space-y-4">
             <Card>
-              <CardContent className="pt-6 space-y-4">
-                <h3 className="text-sm font-semibold text-text-main">Indicadores</h3>
-
-                <KPIBar label="Margen Bruto" value={margenBruto} positive={margenBruto >= 0} />
-                <KPIBar label="Margen Neto" value={margenNeto} positive={margenNeto >= 0} />
-
+              <CardContent className="pt-6 space-y-3">
+                <h3 className="text-sm font-semibold text-text-main">Resumen</h3>
+                <Mini label="Ventas netas" value={er.ventasNetas} tone="success" />
+                <Mini label="Costo de ventas" value={er.comprasNetas} tone="warning" />
+                <Mini label="Utilidad bruta" value={er.utilidadBruta} tone="primary" />
+                <Mini label="Gastos de operación" value={er.totalGastosOperacion} tone="error" />
                 <div className="pt-3 border-t border-border-soft space-y-3">
-                  <Stat label="Ingresos" value={data.totalIngresos} tone="success" />
-                  <Stat label="Costo Ventas" value={data.totalCostos} tone="warning" />
-                  <Stat label="Gastos" value={data.totalGastos} tone="error" />
+                  <Mini label={`ISR (${pct(cierreRates.isr)})`} value={er.isr} tone="error" />
+                  <Mini label={`Reserva Legal (${pct(cierreRates.reservaLegal)})`} value={er.reservaLegal} tone="info" />
                 </div>
               </CardContent>
             </Card>
@@ -154,11 +143,15 @@ export function EstadoResultados() {
               <div className="flex items-center gap-2">
                 {isProfit ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                 <p className="text-xs uppercase tracking-widest font-semibold text-white/80">
-                  {isProfit ? 'Resultado positivo' : 'Resultado negativo'}
+                  {isProfit ? 'Ganancia del ejercicio' : 'Pérdida del ejercicio'}
                 </p>
               </div>
-              <p className="text-3xl font-bold tabular-nums mt-2">{formatCurrency(utilidadNeta)}</p>
-              <p className="text-xs text-white/80 mt-1">{margenNeto.toFixed(1)}% margen sobre ingresos</p>
+              <p className="text-3xl font-bold tabular-nums mt-2">{formatCurrency(er.gananciaEjercicio)}</p>
+              {er.ventasNetas > 0 && (
+                <p className="text-xs text-white/80 mt-1">
+                  {((er.gananciaEjercicio / er.ventasNetas) * 100).toFixed(1)}% sobre ventas netas
+                </p>
+              )}
             </Panel>
           </div>
         </div>
@@ -167,55 +160,51 @@ export function EstadoResultados() {
   );
 }
 
-function Section({
-  title,
-  tone,
-  items,
-  total,
-  totalLabel,
-  negative,
-}: {
-  title: string;
-  tone: 'success' | 'warning' | 'error';
-  items: Item[];
-  total: number;
-  totalLabel: string;
-  negative?: boolean;
-}) {
-  if (items.length === 0) return null;
-  const toneColors = {
-    success: 'text-success',
-    warning: 'text-warning',
-    error: 'text-error',
-  };
+function Group({ title }: { title: string }) {
   return (
-    <div>
-      <div className="px-5 py-2.5 bg-surface-soft border-y border-border-soft flex items-center justify-between">
-        <h3 className={`text-xs uppercase tracking-widest font-bold ${toneColors[tone]}`}>{title}</h3>
+    <div className="px-5 py-2.5 bg-surface-soft border-y border-border-soft">
+      <h3 className="text-xs uppercase tracking-widest font-bold text-text-subtle">{title}</h3>
+    </div>
+  );
+}
+
+function Line({
+  label,
+  codigo,
+  value,
+  subtract,
+  muted,
+}: {
+  label: string;
+  codigo?: string;
+  value: number;
+  subtract?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between px-5 py-2 hover:bg-surface-soft/40 transition-colors">
+      <div className="flex items-center gap-2.5 min-w-0">
+        {codigo && <span className="font-mono text-[10px] text-text-subtle w-14 shrink-0">{codigo}</span>}
+        <span className="text-sm text-text-main truncate">{label}</span>
       </div>
-      <div className="divide-y divide-border-soft">
-        {items.map(item => (
-          <div key={item.codigo} className="flex items-center justify-between px-5 py-2 hover:bg-surface-soft/40 transition-colors">
-            <div className="flex items-center gap-2.5">
-              <span className="font-mono text-[10px] text-text-subtle w-14">{item.codigo}</span>
-              <span className="text-sm text-text-main">{item.nombre}</span>
-            </div>
-            <span className="text-sm tabular-nums text-text-muted">
-              {negative && '('}
-              {formatCurrency(item.monto)}
-              {negative && ')'}
-            </span>
-          </div>
-        ))}
-        <div className="flex items-center justify-between px-5 py-2.5 bg-surface-soft/60">
-          <span className="text-xs uppercase tracking-wider font-semibold text-text-muted">{totalLabel}</span>
-          <span className="text-sm font-bold tabular-nums text-text-main">
-            {negative && '('}
-            {formatCurrency(total)}
-            {negative && ')'}
-          </span>
-        </div>
-      </div>
+      <span className={`text-sm tabular-nums ${muted ? 'text-text-muted' : 'text-text-main'}`}>
+        {subtract && '('}
+        {formatCurrency(value)}
+        {subtract && ')'}
+      </span>
+    </div>
+  );
+}
+
+function Subtotal({ label, value, subtract }: { label: string; value: number; subtract?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-5 py-2.5 bg-surface-soft/60 border-b border-border-soft">
+      <span className="text-xs uppercase tracking-wider font-semibold text-text-muted">{label}</span>
+      <span className="text-sm font-bold tabular-nums text-text-main">
+        {subtract && '('}
+        {formatCurrency(value)}
+        {subtract && ')'}
+      </span>
     </div>
   );
 }
@@ -239,9 +228,7 @@ function BigTotal({
   return (
     <div
       className={`flex items-center justify-between px-5 py-3.5 border-t-2 ${
-        highlight
-          ? 'border-primary-500/40 bg-primary-50 dark:bg-primary-100/10'
-          : 'border-border-soft'
+        highlight ? 'border-primary-500/40 bg-primary-50 dark:bg-primary-100/10' : 'border-border-soft'
       }`}
     >
       <span className={`text-sm uppercase tracking-wider font-bold ${toneColors[tone]}`}>{label}</span>
@@ -250,35 +237,21 @@ function BigTotal({
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'error' }) {
-  const dotColors = { success: 'bg-success', warning: 'bg-warning', error: 'bg-error' };
+function Mini({ label, value, tone }: { label: string; value: number; tone: 'success' | 'warning' | 'error' | 'primary' | 'info' }) {
+  const dot = {
+    success: 'bg-success',
+    warning: 'bg-warning',
+    error: 'bg-error',
+    primary: 'bg-primary-500',
+    info: 'bg-info',
+  };
   return (
     <div className="flex items-center justify-between">
       <span className="flex items-center gap-2 text-sm text-text-muted">
-        <span className={`w-1.5 h-1.5 rounded-full ${dotColors[tone]}`} />
+        <span className={`w-1.5 h-1.5 rounded-full ${dot[tone]}`} />
         {label}
       </span>
       <span className="text-sm font-medium tabular-nums">{formatCurrency(value)}</span>
-    </div>
-  );
-}
-
-function KPIBar({ label, value, positive }: { label: string; value: number; positive: boolean }) {
-  const pct = Math.min(Math.abs(value), 100);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-text-muted">{label}</span>
-        <span className={`text-sm font-bold tabular-nums ${positive ? 'text-success' : 'text-error'}`}>
-          {value.toFixed(1)}%
-        </span>
-      </div>
-      <div className="h-1.5 bg-surface-soft rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${positive ? 'bg-success' : 'bg-error'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   );
 }

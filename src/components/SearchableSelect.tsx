@@ -59,7 +59,9 @@ export function SearchableSelect({
   }, []);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => inputRef.current?.focus(), 30);
+    if (!isOpen) return;
+    const id = setTimeout(() => inputRef.current?.focus(), 30);
+    return () => clearTimeout(id);
   }, [isOpen]);
 
   const handleSelect = (val: string) => {

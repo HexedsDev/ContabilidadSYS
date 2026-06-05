@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore, computeBalances, totalsByPrefix } from '../store/useStore';
+import { useStore, computeBalances } from '../store/useStore';
 import { formatCurrency, formatRelative, formatNumber } from '../utils/helpers';
 import { computeRatios } from '../utils/financial';
+import { computeEstadoResultados, computeBalanceGeneral } from '../utils/cierre';
 import {
   Activity,
   AlertTriangle,
@@ -30,6 +31,7 @@ export function Dashboard() {
   const entries = useStore(s => s.entries);
   const accounts = useStore(s => s.accounts);
   const alerts = useStore(s => s.alerts);
+  const cierreRates = useStore(s => s.cierreRates);
   const initializeStore = useStore(s => s.initializeStore);
   const loadFakeData = useStore(s => s.loadFakeData);
   const toast = useToast();
@@ -41,19 +43,23 @@ export function Dashboard() {
 
   const balances = useMemo(() => computeBalances(entries, accounts), [entries, accounts]);
   const ratios = useMemo(() => computeRatios(balances), [balances]);
+  const er = useMemo(() => computeEstadoResultados(balances, cierreRates), [balances, cierreRates]);
+  const bg = useMemo(() => computeBalanceGeneral(balances, cierreRates), [balances, cierreRates]);
 
   const totals = useMemo(() => {
-    const totalActivo = totalsByPrefix(balances, '1');
-    const totalPasivo = totalsByPrefix(balances, '2');
-    const totalCapital = totalsByPrefix(balances, '3');
-    const totalIngresos = totalsByPrefix(balances, '4');
-    const totalCostos = totalsByPrefix(balances, '5.1');
-    const totalGastos = totalsByPrefix(balances, '5.2') + totalsByPrefix(balances, '6');
-    const utilidad = totalIngresos - totalCostos - totalGastos;
-    const patrimonioTotal = totalCapital + utilidad;
-    const difEcuacion = totalActivo - (totalPasivo + patrimonioTotal);
-    return { totalActivo, totalPasivo, totalCapital, totalIngresos, totalCostos, totalGastos, utilidad, patrimonioTotal, difEcuacion };
-  }, [balances]);
+    const totalCapital = bg.capital.reduce((s, c) => s + c.monto, 0);
+    return {
+      totalActivo: bg.totalActivo,
+      totalPasivo: bg.totalPasivo,
+      totalCapital,
+      patrimonioTotal: bg.totalPatrimonio,
+      totalIngresos: er.ventasNetas + er.totalOtrosIngresos,
+      totalCostos: er.comprasNetas,
+      totalGastos: er.totalGastosOperacion + er.totalGastosNoOperativos,
+      utilidad: er.gananciaEjercicio,
+      difEcuacion: bg.diferencia,
+    };
+  }, [bg, er]);
 
   const stats = {
     total: entries.length,
@@ -76,7 +82,7 @@ export function Dashboard() {
     toast.success('Datos de demo cargados');
   };
 
-  const ecuacionOK = Math.abs(totals.difEcuacion) < 0.01;
+  const ecuacionOK = bg.cuadrado;
 
   return (
     <div className="space-y-6">

@@ -14,6 +14,7 @@ import { Auditoria } from './pages/Auditoria';
 import { Reportes } from './pages/Reportes';
 import { EstadoResultados } from './pages/EstadoResultados';
 import { BalanceGeneral } from './pages/BalanceGeneral';
+import { Cierre } from './pages/Cierre';
 import { PartidaApertura } from './pages/PartidaApertura';
 import { Configuracion } from './pages/Configuracion';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -95,6 +96,7 @@ function App() {
               <Route path="auditoria" element={<Auditoria />} />
               <Route path="resultados" element={<EstadoResultados />} />
               <Route path="balance-general" element={<BalanceGeneral />} />
+              <Route path="cierre" element={<Cierre />} />
               <Route path="reportes" element={<Reportes />} />
               <Route path="configuracion" element={<Configuracion />} />
               <Route
