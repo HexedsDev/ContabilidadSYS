@@ -123,51 +123,85 @@ export function RegistrarPartida() {
   };
 
   const resolveDocumentAccount = (line: AIAnalysisLine): string | null => {
+    // Solo cuentas de detalle: la IA nunca debe colocar agrupadores en el formulario.
     if (line.cuenta_codigo) {
-      const byCode = accounts.find(acc => acc.codigo === line.cuenta_codigo);
+      const byCode = detalleAccounts.find(acc => acc.codigo === line.cuenta_codigo);
       if (byCode) return byCode.codigo;
     }
     if (line.cuenta_nombre) {
       const normalized = line.cuenta_nombre.trim().toLowerCase();
-      const byName = accounts.find(acc => acc.nombre.toLowerCase() === normalized);
+      const byName = detalleAccounts.find(acc => acc.nombre.toLowerCase() === normalized);
       if (byName) return byName.codigo;
-      const partial = accounts.filter(acc => acc.nombre.toLowerCase().includes(normalized));
+      const partial = detalleAccounts.filter(acc => acc.nombre.toLowerCase().includes(normalized));
       if (partial.length === 1) return partial[0].codigo;
     }
     return null;
   };
 
-  const normalizeAnalysisDraft = (draft: AIAnalysisDraft): Line[] => {
-    const resolved = draft.lineas
-      .map(line => {
-        const cuenta_codigo = resolveDocumentAccount(line);
-        if (!cuenta_codigo) return null;
-        const debe = Number(line.debe) || 0;
-        const haber = Number(line.haber) || 0;
-        if (debe <= 0 && haber <= 0) return null;
-        if (debe > 0 && haber > 0) return null;
-        return { cuenta_codigo, debe: Number(debe.toFixed(2)), haber: Number(haber.toFixed(2)) };
-      })
-      .filter((line): line is Line => line !== null);
+  const normalizeAnalysisDraft = (draft: AIAnalysisDraft): { lines: Line[]; warnings: string[] } => {
+    const warnings: string[] = [];
+    const unmatched: string[] = [];
+    // Consolida por cuenta (neto debe−haber): evita cuentas repetidas, que la
+    // validación de partidas rechaza, y líneas con ambos lados a la vez.
+    const porCuenta = new Map<string, number>();
+
+    for (const line of draft.lineas) {
+      const debe = Number(line.debe) || 0;
+      const haber = Number(line.haber) || 0;
+      if (debe === 0 && haber === 0) continue;
+      if (debe < 0 || haber < 0) {
+        warnings.push(`Se descartó una línea con monto negativo (${line.cuenta_nombre ?? line.cuenta_codigo}).`);
+        continue;
+      }
+      const cuenta_codigo = resolveDocumentAccount(line);
+      if (!cuenta_codigo) {
+        unmatched.push(line.cuenta_nombre || line.cuenta_codigo || 'cuenta sin nombre');
+        continue;
+      }
+      porCuenta.set(cuenta_codigo, (porCuenta.get(cuenta_codigo) ?? 0) + debe - haber);
+    }
+
+    const resolved: Line[] = [...porCuenta.entries()]
+      .filter(([, neto]) => Math.abs(neto) >= 0.005)
+      .map(([cuenta_codigo, neto]) => ({
+        cuenta_codigo,
+        debe: neto > 0 ? Number(neto.toFixed(2)) : 0,
+        haber: neto < 0 ? Number(Math.abs(neto).toFixed(2)) : 0,
+      }));
 
     if (resolved.length < 2) {
       throw new Error('No se pudieron interpretar suficientes lineas contables');
+    }
+
+    if (unmatched.length > 0) {
+      // NO se re-cuadra: mover la diferencia a otra cuenta corrompería la partida.
+      warnings.push(
+        `No se reconocieron ${unmatched.length} cuenta(s): ${unmatched.join(', ')}. Agrégalas manualmente antes de contabilizar.`
+      );
+      return { lines: resolved, warnings };
     }
 
     const totalDebeResolved = resolved.reduce((sum, line) => sum + line.debe, 0);
     const totalHaberResolved = resolved.reduce((sum, line) => sum + line.haber, 0);
     const diffResolved = Number((totalDebeResolved - totalHaberResolved).toFixed(2));
 
-    if (Math.abs(diffResolved) > 0.01) {
+    if (Math.abs(diffResolved) > 0.01 && Math.abs(diffResolved) <= 0.05) {
+      // Diferencia de centavos por redondeo: se ajusta en el lado que ya tiene monto.
       const last = resolved[resolved.length - 1];
-      if (diffResolved > 0) {
+      if (diffResolved > 0 && last.haber > 0) {
         last.haber = Number((last.haber + diffResolved).toFixed(2));
+      } else if (diffResolved < 0 && last.debe > 0) {
+        last.debe = Number((last.debe - diffResolved).toFixed(2));
       } else {
-        last.debe = Number((last.debe + Math.abs(diffResolved)).toFixed(2));
+        warnings.push(`Quedó una diferencia de redondeo de ${formatCurrency(Math.abs(diffResolved))}.`);
       }
+    } else if (Math.abs(diffResolved) > 0.05) {
+      warnings.push(
+        `El borrador quedó descuadrado por ${formatCurrency(Math.abs(diffResolved))}. Revisa los montos antes de contabilizar.`
+      );
     }
 
-    return resolved;
+    return { lines: resolved, warnings };
   };
 
   const handleAnalyzeDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,10 +231,15 @@ export function RegistrarPartida() {
         model: OPENAI_DEFAULT_MODEL,
       });
 
-      const resolvedLines = normalizeAnalysisDraft(draft);
+      const { lines: resolvedLines, warnings } = normalizeAnalysisDraft(draft);
       const today = new Date().toISOString().split('T')[0];
+      const fechaIA = draft.fecha?.trim() ?? '';
+      const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaIA);
+      if (fechaIA && !fechaValida) {
+        warnings.push(`La fecha "${fechaIA}" no tiene formato válido; se usó la fecha de hoy.`);
+      }
 
-      setFecha(draft.fecha?.trim() || today);
+      setFecha(fechaValida ? fechaIA : today);
       setConcepto(draft.concepto?.trim() || `Documento analizado: ${file.name}`);
       setObservaciones(
         [draft.observaciones?.trim(), `Fuente: ${file.name}`, draft.confidence ? `Confianza: ${Math.round(draft.confidence * 100)}%` : null]
@@ -214,8 +253,14 @@ export function RegistrarPartida() {
           haber: line.haber,
         }))
       );
-      setAnalysisNote(`Se genero un borrador con ${resolvedLines.length} lineas. Revisa antes de contabilizar.`);
-      toast.success('Documento analizado', 'El borrador se completo automaticamente');
+      setAnalysisNote(
+        [`Se generó un borrador con ${resolvedLines.length} líneas. Revisa antes de contabilizar.`, ...warnings].join(' ')
+      );
+      if (warnings.length > 0) {
+        toast.warning('Documento analizado con advertencias', warnings[0]);
+      } else {
+        toast.success('Documento analizado', 'El borrador se completó automáticamente');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo analizar el documento';
       setAnalysisNote(message);
@@ -246,10 +291,15 @@ export function RegistrarPartida() {
         model: OPENAI_DEFAULT_MODEL,
       });
 
-      const resolvedLines = normalizeAnalysisDraft(draft);
+      const { lines: resolvedLines, warnings } = normalizeAnalysisDraft(draft);
       const today = new Date().toISOString().split('T')[0];
+      const fechaIA = draft.fecha?.trim() ?? '';
+      const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaIA);
+      if (fechaIA && !fechaValida) {
+        warnings.push(`La fecha "${fechaIA}" no tiene formato válido; se usó la fecha de hoy.`);
+      }
 
-      setFecha(draft.fecha?.trim() || today);
+      setFecha(fechaValida ? fechaIA : today);
       setConcepto(draft.concepto?.trim() || 'Documento analizado desde texto');
       setObservaciones(
         [
@@ -267,8 +317,14 @@ export function RegistrarPartida() {
           haber: line.haber,
         }))
       );
-      setAnalysisNote(`Se genero un borrador con ${resolvedLines.length} lineas. Revisa antes de contabilizar.`);
-      toast.success('Texto analizado', 'El borrador se completo automaticamente');
+      setAnalysisNote(
+        [`Se generó un borrador con ${resolvedLines.length} líneas. Revisa antes de contabilizar.`, ...warnings].join(' ')
+      );
+      if (warnings.length > 0) {
+        toast.warning('Texto analizado con advertencias', warnings[0]);
+      } else {
+        toast.success('Texto analizado', 'El borrador se completó automáticamente');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo analizar el texto';
       setAnalysisNote(message);
@@ -291,6 +347,7 @@ export function RegistrarPartida() {
       }
       if (lineas.some(l => !l.cuenta_codigo)) errs.push('Todas las líneas requieren una cuenta seleccionada');
       if (lineas.some(l => l.debe === 0 && l.haber === 0)) errs.push('No puede haber líneas sin monto');
+      if (lineas.some(l => l.debe < 0 || l.haber < 0)) errs.push('Los montos no pueden ser negativos');
       if (lineas.some(l => l.debe > 0 && l.haber > 0)) errs.push('Una línea no puede tener valor en Debe y Haber a la vez');
       if (!isBalanced) errs.push(`Partida descuadrada: diferencia de ${formatCurrency(Math.abs(diff))}`);
       if (totalDebe === 0) errs.push('Los montos no pueden ser cero');
@@ -387,7 +444,7 @@ export function RegistrarPartida() {
             <input
               ref={documentInputRef}
               type="file"
-              accept="application/pdf,image/*,.txt,.md,.csv,.doc,.docx,.rtf,.html"
+              accept="application/pdf,image/*,.txt,.md,.csv,.html"
               onChange={handleAnalyzeDocument}
               className="hidden"
             />
