@@ -304,6 +304,21 @@ export const useStore = create<AppState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         cierreRates: state.cierreRates,
       }),
+      onRehydrateStorage: () => state => {
+        if (!state || state.accounts.length === 0) return;
+        // Migración de catálogo: agrega cuentas del catálogo base que falten en
+        // stores ya persistidos (p.ej. el agrupador 3.1 o las cuentas de
+        // depreciación de maquinaria/herramientas) sin tocar las del usuario.
+        const existing = new Set(state.accounts.map(a => a.codigo));
+        const missing = seedAccounts().filter(a => !existing.has(a.codigo));
+        if (missing.length > 0) {
+          useStore.setState({
+            accounts: [...state.accounts, ...missing].sort((a, b) =>
+              a.codigo.localeCompare(b.codigo, undefined, { numeric: true })
+            ),
+          });
+        }
+      },
     }
   )
 );

@@ -343,6 +343,20 @@
         "estado_financiero": "Balance General"
     },
     {
+        "codigo": "1.3.09",
+        "nombre": "Depreciación Acumulada Herramientas",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "1.3.10",
+        "nombre": "Amortización Acumulada Derecho de Llave",
+        "tipo": "Detalle",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
         "codigo": "2",
         "nombre": "PASIVO",
         "tipo": "Agrupador",
@@ -513,6 +527,13 @@
     {
         "codigo": "3",
         "nombre": "PATRIMONIO NETO",
+        "tipo": "Agrupador",
+        "saldo_normal": "Acreedor",
+        "estado_financiero": "Balance General"
+    },
+    {
+        "codigo": "3.1",
+        "nombre": "CAPITAL Y RESERVAS",
         "tipo": "Agrupador",
         "saldo_normal": "Acreedor",
         "estado_financiero": "Balance General"
@@ -912,6 +933,20 @@
     {
         "codigo": "5.2.25",
         "nombre": "Cuentas Incobrables / Cuentas Malas",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.26",
+        "nombre": "Depreciación Maquinaria",
+        "tipo": "Detalle",
+        "saldo_normal": "Deudor",
+        "estado_financiero": "Estado de Resultados"
+    },
+    {
+        "codigo": "5.2.27",
+        "nombre": "Depreciación Herramientas",
         "tipo": "Detalle",
         "saldo_normal": "Deudor",
         "estado_financiero": "Estado de Resultados"

@@ -1,4 +1,10 @@
 import type { AccountBalance } from '../store/useStore';
+import {
+  computeEstadoResultados,
+  computeBalanceGeneral,
+  DEFAULT_CIERRE_RATES,
+  type CierreRates,
+} from './cierre';
 
 export interface FinancialRatios {
   liquidezCorriente: number;     // Activo Corriente / Pasivo Corriente
@@ -27,33 +33,29 @@ const netPrefix = (balances: Record<string, AccountBalance>, prefix: string) => 
 };
 
 export const computeRatios = (
-  balances: Record<string, AccountBalance>
+  balances: Record<string, AccountBalance>,
+  rates: CierreRates = DEFAULT_CIERRE_RATES
 ): FinancialRatios => {
-  const activoCorr = netPrefix(balances, '1.1') + netPrefix(balances, '1.3.08'); // exigible neto de reserva incobrables
+  // Misma cascada que los estados financieros (cierre.ts): la utilidad neta de
+  // los ratios es la Ganancia del Ejercicio (después de ISR y Reserva Legal),
+  // de modo que el Dashboard muestre UNA sola cifra de utilidad, no dos.
+  const er = computeEstadoResultados(balances, rates);
+  const bg = computeBalanceGeneral(balances, rates);
   const inventario = netPrefix(balances, '1.1.13') + netPrefix(balances, '1.1.14');
-  const pasivoCorr = -netPrefix(balances, '2.1');
-  const activoTotal = netPrefix(balances, '1'); // contra-cuentas (deprec. acum. 1.3.x) restan
-  const pasivoTotal = -netPrefix(balances, '2');
-  const patrimonio = -netPrefix(balances, '3');
-  const ingresos = -netPrefix(balances, '4');
-  const costos = netPrefix(balances, '5.1');
-  // Gastos = todo el grupo 5 excepto el costo de ventas (5.1), más el grupo 6.
-  const gastos = netPrefix(balances, '5') - costos + netPrefix(balances, '6');
-  const utilBruta = ingresos - costos;
-  const utilNeta = utilBruta - gastos;
-  const patrimonioTotal = patrimonio + utilNeta;
+  const utilNeta = er.gananciaEjercicio;
+  const ingresos = er.ventasNetas + er.totalOtrosIngresos;
 
   const safe = (n: number, d: number) => (d === 0 ? 0 : n / d);
 
   return {
-    liquidezCorriente: safe(activoCorr, pasivoCorr),
-    pruebaAcida: safe(activoCorr - inventario, pasivoCorr),
-    endeudamiento: safe(pasivoTotal, activoTotal) * 100,
-    autonomia: safe(patrimonioTotal, activoTotal) * 100,
-    margenBruto: safe(utilBruta, ingresos) * 100,
+    liquidezCorriente: safe(bg.totalCorriente, bg.totalPasivoCorriente),
+    pruebaAcida: safe(bg.totalCorriente - inventario, bg.totalPasivoCorriente),
+    endeudamiento: safe(bg.totalPasivo, bg.totalActivo) * 100,
+    autonomia: safe(bg.totalPatrimonio, bg.totalActivo) * 100,
+    margenBruto: safe(er.utilidadBruta, ingresos) * 100,
     margenNeto: safe(utilNeta, ingresos) * 100,
-    roa: safe(utilNeta, activoTotal) * 100,
-    roe: safe(utilNeta, patrimonioTotal) * 100,
+    roa: safe(utilNeta, bg.totalActivo) * 100,
+    roe: safe(utilNeta, bg.totalPatrimonio) * 100,
   };
 };
 

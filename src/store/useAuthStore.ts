@@ -56,6 +56,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       currentUser: null,
       users: seedUsers(),
+      removedSeedIds: [],
       isAuthenticated: false,
       hydrated: false,
 
@@ -133,8 +134,14 @@ export const useAuthStore = create<AuthState>()(
           return makeResult(false, 'Debe conservar al menos un Super Admin activo');
         }
 
+        const seedIds = new Set(seedUsers().map(user => user.id));
         set(state => ({
           users: state.users.filter(user => user.id !== id),
+          // Tombstone: sin esto, un usuario semilla eliminado "resucitaría" en
+          // la próxima hidratación al volver a fusionar seedUsers().
+          ...(seedIds.has(id)
+            ? { removedSeedIds: [...new Set([...state.removedSeedIds, id])] }
+            : {}),
           ...(currentUser?.id === id ? { currentUser: null, isAuthenticated: false } : {}),
         }));
 
@@ -195,11 +202,15 @@ export const useAuthStore = create<AuthState>()(
       partialize: state => ({
         currentUser: state.currentUser,
         users: state.users,
+        removedSeedIds: state.removedSeedIds,
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => state => {
         if (!state) return;
-        const seededUsers = seedUsers();
+        // Seeds eliminados por un admin no vuelven a sembrarse (tombstones).
+        const removedSeedIds = state.removedSeedIds ?? [];
+        const removed = new Set(removedSeedIds);
+        const seededUsers = seedUsers().filter(user => !removed.has(user.id));
         // Persisted users come FIRST so their data (e.g. changed passwords) takes precedence.
         // Seeded users are added only when no persisted user shares the same id/email.
         const users = [...(state.users ?? []), ...seededUsers].reduce<User[]>((acc, user) => {
@@ -214,6 +225,7 @@ export const useAuthStore = create<AuthState>()(
         useAuthStore.setState({
           users,
           currentUser,
+          removedSeedIds,
           isAuthenticated: !!currentUser && currentUser.activo,
           hydrated: true,
         });

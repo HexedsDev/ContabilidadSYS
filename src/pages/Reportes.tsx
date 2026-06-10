@@ -117,7 +117,12 @@ export function Reportes() {
   };
 
   const balances = computeBalances(entries, accounts);
-  const totalActivo = Object.values(balances).filter(b => b.codigo.startsWith('1')).reduce((s, b) => s + b.saldo, 0);
+  // Neto debe−haber: las contracuentas 1.3.x (depreciación acumulada, reserva
+  // de incobrables) restan del activo en lugar de inflarlo — mismo criterio
+  // que el Balance General en pantalla y en PDF.
+  const totalActivo = Object.values(balances)
+    .filter(b => b.codigo.startsWith('1'))
+    .reduce((s, b) => s + b.debe - b.haber, 0);
   const totalDebe = entries.reduce((s, e) => s + e.lineas.reduce((ls, l) => ls + (l.debe || 0), 0), 0);
   const iva = computeIVA(balances);
 

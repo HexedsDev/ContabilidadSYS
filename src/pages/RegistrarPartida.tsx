@@ -401,6 +401,33 @@ export function RegistrarPartida() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Re-sincroniza el formulario al entrar/salir del modo edición: navegar de
+  // "Editar partida" al enlace "Registrar Partida" (misma ruta, sin state) no
+  // desmonta el componente; sin este reset el formulario retendría la partida
+  // editada y "Contabilizar" la duplicaría como partida nueva.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (entryToEdit) {
+      setFecha(entryToEdit.fecha);
+      setConcepto(entryToEdit.concepto);
+      setObservaciones(entryToEdit.observaciones);
+      setLineas(entryToEdit.lineas.map(l => ({ ...l })));
+    } else {
+      setFecha(new Date().toISOString().split('T')[0]);
+      setConcepto('');
+      setObservaciones('');
+      setLineas([
+        { cuenta_codigo: '', debe: 0, haber: 0 },
+        { cuenta_codigo: '', debe: 0, haber: 0 },
+      ]);
+    }
+    setErrors([]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // entryToEdit deriva de editId; depender solo de editId evita resets
+    // mientras la lista de partidas cambia durante la edición.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   const nextNumber = editId ? entryToEdit?.numero : (entries.length > 0 ? Math.max(...entries.map(e => e.numero)) + 1 : 1);
 
   return (

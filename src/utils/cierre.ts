@@ -81,12 +81,14 @@ export const DEPRECIABLES: DepreciableSpec[] = [
   { key: 'deprMobiliario', cuentaActivo: '1.2.04', nombre: 'Mobiliario y Equipo', cuentaGasto: '5.2.21', cuentaAcumulada: '1.3.02' },
   { key: 'deprComputo', cuentaActivo: '1.2.05', nombre: 'Equipo de Computación', cuentaGasto: '5.2.22', cuentaAcumulada: '1.3.03' },
   { key: 'deprVehiculos', cuentaActivo: '1.2.06', nombre: 'Vehículos', cuentaGasto: '5.2.23', cuentaAcumulada: '1.3.04' },
-  { key: 'deprMaquinaria', cuentaActivo: '1.2.07', nombre: 'Maquinaria', cuentaGasto: '5.2.21', cuentaAcumulada: '1.3.05' },
+  { key: 'deprMaquinaria', cuentaActivo: '1.2.07', nombre: 'Maquinaria', cuentaGasto: '5.2.26', cuentaAcumulada: '1.3.05' },
+  { key: 'deprHerramientas', cuentaActivo: '1.2.08', nombre: 'Herramientas', cuentaGasto: '5.2.27', cuentaAcumulada: '1.3.09' },
 ];
 
 export const AMORTIZABLES: DepreciableSpec[] = [
   { key: 'amortizacion', cuentaActivo: '1.2.12', nombre: 'Gastos de Organización', cuentaGasto: '5.2.24', cuentaAcumulada: '1.3.06' },
   { key: 'amortizacion', cuentaActivo: '1.2.10', nombre: 'Marcas y Patentes', cuentaGasto: '5.2.24', cuentaAcumulada: '1.3.07' },
+  { key: 'amortizacion', cuentaActivo: '1.2.11', nombre: 'Derecho de Llave', cuentaGasto: '5.2.24', cuentaAcumulada: '1.3.10' },
 ];
 
 /* ============================ Utilidades ============================ */
@@ -382,8 +384,12 @@ export const computeBalanceGeneral = (
   const totalNoCorriente = sum(noCorriente);
   const totalActivo = totalCorriente + totalNoCorriente;
 
-  // ISR por pagar (analítico) entra al pasivo corriente.
-  const isrPorPagar = er.isr;
+  // ISR por pagar (analítico) entra al pasivo corriente. Si el usuario ya
+  // contabilizó el ISR manualmente (5.3.05 contra 2.1.06), esa porción ya está
+  // dentro de pasivoCorriente: aquí solo se agrega el remanente, para no
+  // duplicar el ISR en el pasivo y mantener la ecuación cuadrada.
+  const isrContabilizado = Math.max(0, -net(balances['2.1.06']));
+  const isrPorPagar = Math.max(0, er.isr - isrContabilizado);
   const totalPasivoCorriente = sum(pasivoCorriente) + isrPorPagar;
   const totalPasivoNoCorriente = sum(pasivoNoCorriente);
   const totalPasivo = totalPasivoCorriente + totalPasivoNoCorriente;

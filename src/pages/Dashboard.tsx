@@ -42,7 +42,7 @@ export function Dashboard() {
   }, [initializeStore]);
 
   const balances = useMemo(() => computeBalances(entries, accounts), [entries, accounts]);
-  const ratios = useMemo(() => computeRatios(balances), [balances]);
+  const ratios = useMemo(() => computeRatios(balances, cierreRates), [balances, cierreRates]);
   const er = useMemo(() => computeEstadoResultados(balances, cierreRates), [balances, cierreRates]);
   const bg = useMemo(() => computeBalanceGeneral(balances, cierreRates), [balances, cierreRates]);
 

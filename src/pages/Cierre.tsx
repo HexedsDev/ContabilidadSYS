@@ -18,7 +18,11 @@ import { useToast } from '../components/ui/toast-context';
 import type { JournalEntry, EntryLine } from '../types';
 import { Calculator, TrendingDown, Receipt, FilePlus2, CheckCircle2 } from 'lucide-react';
 
-const ADJ_MARK = '[ajuste-cierre]';
+// La marca antigua era '[ajuste-cierre]'; las nuevas llevan el tipo
+// ('[ajuste-cierre:deprec]') para poder registrar cada ajuste por separado.
+const ADJ_MARK_BASE = '[ajuste-cierre';
+type AdjKey = 'deprec' | 'amort' | 'incobrables';
+const adjMark = (k: AdjKey) => `${ADJ_MARK_BASE}:${k}]`;
 type AdjEntry = Omit<JournalEntry, 'id' | 'numero' | 'creada_en' | 'actualizada_en'>;
 
 export function Cierre() {
@@ -41,60 +45,120 @@ export function Cierre() {
   const er = useMemo(() => computeEstadoResultados(balances, cierreRates), [balances, cierreRates]);
 
   const fecha = empresa.periodo_fin || new Date().toISOString().split('T')[0];
-  const alreadyPosted = entries.some(e => (e.observaciones ?? '').includes(ADJ_MARK));
   const hasAdjustments = dep.depreciaciones.length > 0 || dep.amortizaciones.length > 0 || inc.monto > 0;
   const pct = (r: number) => `${(r * 100).toFixed((r * 100) % 1 === 0 ? 0 : 2)}%`;
 
-  const buildPartidas = (): AdjEntry[] => {
-    const mk = (cuenta_codigo: string, debe: number, haber: number): EntryLine => ({
-      id: generateId(),
-      cuenta_codigo,
-      debe,
-      haber,
-    });
-    const partidas: AdjEntry[] = [];
+  // Qué tipos de ajuste ya están en el diario: por marca tipada o, para
+  // partidas creadas con la marca genérica antigua, por su concepto.
+  const postedTypes = useMemo<Record<AdjKey, boolean>>(() => {
+    const marcadas = entries.filter(
+      e => e.estado !== 'anulada' && (e.observaciones ?? '').includes(ADJ_MARK_BASE)
+    );
+    const tiene = (k: AdjKey, palabra: string) =>
+      marcadas.some(
+        e => (e.observaciones ?? '').includes(adjMark(k)) || e.concepto.toLowerCase().includes(palabra)
+      );
+    return {
+      deprec: tiene('deprec', 'depreciación'),
+      amort: tiene('amort', 'amortización'),
+      incobrables: tiene('incobrables', 'incobrables'),
+    };
+  }, [entries]);
+
+  const [selected, setSelected] = useState<Record<AdjKey, boolean>>({
+    deprec: true,
+    amort: true,
+    incobrables: true,
+  });
+
+  const buildPartidas = (): { tipo: AdjKey; partida: AdjEntry }[] => {
+    // Consolida montos por cuenta: dos activos pueden compartir la cuenta de
+    // gasto o la acumulada (p.ej. Edificios e Inmuebles → 5.2.20 / 1.3.01) y
+    // una partida con cuenta repetida no se puede volver a editar después.
+    const acumular = (map: Map<string, number>, cuenta: string, monto: number) =>
+      map.set(cuenta, (map.get(cuenta) ?? 0) + monto);
+    const mkLineas = (debe: Map<string, number>, haber: Map<string, number>): EntryLine[] => [
+      ...[...debe.entries()].map(([cuenta_codigo, monto]) => ({
+        id: generateId(),
+        cuenta_codigo,
+        debe: Number(monto.toFixed(2)),
+        haber: 0,
+      })),
+      ...[...haber.entries()].map(([cuenta_codigo, monto]) => ({
+        id: generateId(),
+        cuenta_codigo,
+        debe: 0,
+        haber: Number(monto.toFixed(2)),
+      })),
+    ];
+
+    const partidas: { tipo: AdjKey; partida: AdjEntry }[] = [];
 
     if (dep.depreciaciones.length > 0) {
+      const debe = new Map<string, number>();
+      const haber = new Map<string, number>();
+      dep.depreciaciones.forEach(d => {
+        acumular(debe, d.cuentaGasto, d.montoAnual);
+        acumular(haber, d.cuentaAcumulada, d.montoAnual);
+      });
       partidas.push({
-        fecha,
-        concepto: 'Partida de ajuste — Depreciación del ejercicio',
-        estado: 'contabilizada',
-        observaciones: `${ADJ_MARK} Depreciación anual según tasas legales`,
-        lineas: [
-          ...dep.depreciaciones.map(d => mk(d.cuentaGasto, d.montoAnual, 0)),
-          ...dep.depreciaciones.map(d => mk(d.cuentaAcumulada, 0, d.montoAnual)),
-        ],
+        tipo: 'deprec',
+        partida: {
+          fecha,
+          concepto: 'Partida de ajuste — Depreciación del ejercicio',
+          estado: 'contabilizada',
+          observaciones: `${adjMark('deprec')} Depreciación anual según tasas legales`,
+          lineas: mkLineas(debe, haber),
+        },
       });
     }
     if (dep.amortizaciones.length > 0) {
+      const debe = new Map<string, number>();
+      const haber = new Map<string, number>();
+      dep.amortizaciones.forEach(d => {
+        acumular(debe, d.cuentaGasto, d.montoAnual);
+        acumular(haber, d.cuentaAcumulada, d.montoAnual);
+      });
       partidas.push({
-        fecha,
-        concepto: 'Partida de ajuste — Amortización del ejercicio',
-        estado: 'contabilizada',
-        observaciones: `${ADJ_MARK} Amortización anual según tasas legales`,
-        lineas: [
-          ...dep.amortizaciones.map(d => mk(d.cuentaGasto, d.montoAnual, 0)),
-          ...dep.amortizaciones.map(d => mk(d.cuentaAcumulada, 0, d.montoAnual)),
-        ],
+        tipo: 'amort',
+        partida: {
+          fecha,
+          concepto: 'Partida de ajuste — Amortización del ejercicio',
+          estado: 'contabilizada',
+          observaciones: `${adjMark('amort')} Amortización anual según tasas legales`,
+          lineas: mkLineas(debe, haber),
+        },
       });
     }
     if (inc.monto > 0) {
       partidas.push({
-        fecha,
-        concepto: 'Partida de ajuste — Cuentas incobrables',
-        estado: 'contabilizada',
-        observaciones: `${ADJ_MARK} Estimación ${pct(cierreRates.incobrables)} sobre clientes`,
-        lineas: [mk(inc.cuentaGasto, inc.monto, 0), mk(inc.cuentaReserva, 0, inc.monto)],
+        tipo: 'incobrables',
+        partida: {
+          fecha,
+          concepto: 'Partida de ajuste — Cuentas incobrables',
+          estado: 'contabilizada',
+          observaciones: `${adjMark('incobrables')} Estimación ${pct(cierreRates.incobrables)} sobre clientes`,
+          lineas: [
+            { id: generateId(), cuenta_codigo: inc.cuentaGasto, debe: inc.monto, haber: 0 },
+            { id: generateId(), cuenta_codigo: inc.cuentaReserva, debe: 0, haber: inc.monto },
+          ],
+        },
       });
     }
     return partidas;
   };
 
   const partidas = buildPartidas();
+  const pendientes = partidas.filter(p => !postedTypes[p.tipo]);
+  const aRegistrar = pendientes.filter(p => selected[p.tipo]);
+  const alreadyPosted = Object.values(postedTypes).some(Boolean);
 
   const handlePost = () => {
-    partidas.forEach(p => addEntry(p));
-    toast.success('Partidas de ajuste registradas', `${partidas.length} partida(s) contabilizadas en el diario`);
+    aRegistrar.forEach(p => addEntry(p.partida));
+    toast.success(
+      'Partidas de ajuste registradas',
+      `${aRegistrar.length} partida(s) contabilizadas en el diario`
+    );
     setConfirmOpen(false);
   };
 
@@ -114,7 +178,7 @@ export function Cierre() {
             <Button
               leftIcon={<FilePlus2 className="w-4 h-4" />}
               onClick={() => setConfirmOpen(true)}
-              disabled={!hasAdjustments}
+              disabled={aRegistrar.length === 0}
             >
               Registrar partidas de ajuste
             </Button>
@@ -200,12 +264,35 @@ export function Cierre() {
             <h3 className="text-sm font-semibold text-text-main">Partidas de ajuste ({partidas.length})</h3>
             <span className="text-xs text-text-subtle ml-auto">Fecha: {fecha}</span>
           </div>
+          <div className="px-5 py-2 border-b border-border-soft bg-surface-soft/60">
+            <p className="text-xs text-text-muted">
+              Marca qué ajustes registrar. Si tu ejercicio no pide depreciación, puedes registrar solo incobrables.
+            </p>
+          </div>
           <CardContent className="p-0 divide-y divide-border-soft">
-            {partidas.map((p, i) => {
+            {partidas.map(({ tipo, partida: p }) => {
               const totalDebe = p.lineas.reduce((s, l) => s + l.debe, 0);
+              const registrada = postedTypes[tipo];
               return (
-                <div key={i} className="p-4">
-                  <p className="text-sm font-semibold text-text-main mb-2">{p.concepto}</p>
+                <div key={tipo} className={`p-4 ${registrada ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <label className={`flex items-center gap-2.5 min-w-0 ${registrada ? '' : 'cursor-pointer'}`}>
+                      {!registrada && (
+                        <input
+                          type="checkbox"
+                          checked={selected[tipo]}
+                          onChange={e => setSelected(prev => ({ ...prev, [tipo]: e.target.checked }))}
+                          className="h-4 w-4 rounded border-border-strong text-primary-600 focus:ring-primary-500"
+                        />
+                      )}
+                      <p className="text-sm font-semibold text-text-main truncate">{p.concepto}</p>
+                    </label>
+                    {registrada && (
+                      <Badge variant="success" size="sm" dot>
+                        Registrada
+                      </Badge>
+                    )}
+                  </div>
                   <table className="w-full text-xs">
                     <tbody>
                       {p.lineas.map(l => (
@@ -237,7 +324,7 @@ export function Cierre() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={handlePost}
         title="¿Registrar partidas de ajuste?"
-        message={`Se contabilizarán ${partidas.length} partida(s) de ajuste con fecha ${fecha}. El ISR y la reserva legal se calculan automáticamente en el Estado de Resultados y Balance General (no requieren partida).`}
+        message={`Se contabilizarán ${aRegistrar.length} partida(s) de ajuste con fecha ${fecha}. El ISR y la reserva legal se calculan automáticamente en el Estado de Resultados y Balance General (no requieren partida).`}
         confirmText="Sí, registrar"
         variant="primary"
       />

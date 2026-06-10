@@ -161,8 +161,12 @@ const validateEntry = (raw: unknown, idx: number): JournalEntry => {
     throw new Error(`entries[${idx}].estado inválido`);
   }
   if (!isString(observaciones, 2000)) throw new Error(`entries[${idx}].observaciones inválido`);
-  if (!Array.isArray(lineas) || lineas.length === 0 || lineas.length > MAX_LINES_PER_ENTRY) {
-    throw new Error(`entries[${idx}].lineas inválido (1-${MAX_LINES_PER_ENTRY})`);
+  // Un borrador puede guardarse solo con fecha y concepto (sin líneas);
+  // exigir mínimo 1 línea rompía la re-importación de respaldos que la
+  // propia app exporta.
+  const minLines = estado === 'borrador' ? 0 : 1;
+  if (!Array.isArray(lineas) || lineas.length < minLines || lineas.length > MAX_LINES_PER_ENTRY) {
+    throw new Error(`entries[${idx}].lineas inválido (${minLines}-${MAX_LINES_PER_ENTRY})`);
   }
   if (!isString(creada_en, 40)) throw new Error(`entries[${idx}].creada_en inválido`);
   if (!isString(actualizada_en, 40)) throw new Error(`entries[${idx}].actualizada_en inválido`);

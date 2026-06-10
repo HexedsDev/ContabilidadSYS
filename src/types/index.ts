@@ -86,6 +86,8 @@ export interface User {
 export interface AuthState {
   currentUser: User | null;
   users: User[];
+  /** Ids de usuarios semilla eliminados: evita que "resuciten" al re-sembrar. */
+  removedSeedIds: string[];
   isAuthenticated: boolean;
   hydrated: boolean;
   login: (email: string, password: string) => { success: boolean; message: string };
