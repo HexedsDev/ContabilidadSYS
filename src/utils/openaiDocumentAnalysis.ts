@@ -247,91 +247,50 @@ const parseAnalysisDraft = (raw: string): AIAnalysisDraft => {
 
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503]);
 
-export async function analyzeDocumentWithOpenAI(params: {
+const empresaContext = (empresa: Empresa): string[] => [
+  `Empresa: ${empresa.razon_social}`,
+  `NIT de la empresa: ${empresa.nit}`,
+  `Moneda: ${empresa.moneda} (${empresa.simbolo_moneda})`,
+  `Período fiscal: ${empresa.periodo_inicio} a ${empresa.periodo_fin} (${empresa.ciclo}).`,
+  `Fecha de hoy: ${new Date().toISOString().split('T')[0]}.`,
+];
+
+// Construye el contenido del mensaje del usuario: el prompt de texto + el
+// documento adjunto en el formato que la Responses API "ve" (imagen vs PDF vs
+// texto). Enviar una foto como input_file impediría que el modelo la lea.
+const buildUserContent = async (opts: {
+  prompt: string;
   file?: File;
   text?: string;
-  apiKey: string;
-  accounts: Account[];
-  empresa: Empresa;
-  model?: string;
-}): Promise<AIAnalysisDraft> {
-  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL } = params;
-  if (!apiKey.trim()) throw new Error('Falta la API key de OpenAI');
-  if (!file && !text?.trim()) {
-    throw new Error('Debes subir un archivo o escribir el contenido del documento');
-  }
-  if (file && file.size > MAX_ANALYSIS_FILE_BYTES) {
-    throw new Error(`El archivo excede el limite permitido (${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB)`);
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  const prompt = [
-    `Empresa: ${empresa.razon_social}`,
-    `NIT de la empresa: ${empresa.nit}`,
-    `Moneda: ${empresa.moneda} (${empresa.simbolo_moneda})`,
-    `Período fiscal: ${empresa.periodo_inicio} a ${empresa.periodo_fin} (${empresa.ciclo}).`,
-    `Fecha de hoy: ${today}.`,
-    'Catalogo de cuentas disponibles:',
-    buildAccountCatalog(accounts),
-    '',
-    'Analiza el documento y devuelve un borrador de partida contable.',
-    'Instrucciones:',
-    '- Si la empresa aparece como EMISOR de la factura, es una VENTA; si aparece como CLIENTE/RECEPTOR, es una COMPRA. Usa el NIT y la razón social para decidirlo.',
-    '- Calcula primero el TOTAL del documento; luego base = redondear(total / 1.12, 2) e IVA = total - base. Si el documento desglosa base e IVA, usa esos valores exactos.',
-    '- Devuelve cada código de cuenta EXACTAMENTE como aparece en el catálogo, incluyendo los puntos (ej. 2.1.05, nunca 2105 ni 2.1.5), y también el nombre exacto.',
-    '- Usa solo cuentas del catálogo de detalle; prefiere las cuentas específicas sobre las genéricas.',
-    '- Antes de responder verifica que la suma del Debe sea igual a la suma del Haber al centavo; si hay Q0.01 de diferencia por redondeo, ajústala en la línea de IVA.',
-    '- No repitas la misma cuenta en dos líneas: consolida los montos por cuenta.',
-    '- Si el archivo contiene varias facturas o documentos, genera la partida solo del documento principal e indícalo en observaciones.',
-    '- Si falta algún dato de texto (fecha, contraparte), deja el campo vacío; los montos nunca se inventan: si no puedes leer el monto total, devuelve confidence menor a 0.3 y explica el problema en observaciones.',
-    '- Las fechas parciales ("15 de abril") se completan con el año del período fiscal; las relativas ("ayer") se resuelven con la fecha de hoy.',
-  ].join('\n');
-
-  // La Responses API distingue imágenes (input_image), PDFs (input_file) y
-  // texto plano (input_text). Enviar una foto como input_file impide que el
-  // modelo la "vea", y enviar .txt/.docx como input_file produce un 400.
-  const inputContent: Array<Record<string, unknown>> = [{ type: 'input_text', text: prompt }];
-  if (file) {
-    const name = file.name.toLowerCase();
-    if (file.type.startsWith('image/')) {
-      inputContent.push({ type: 'input_image', image_url: await toDataUrl(file), detail: 'high' });
-    } else if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
-      inputContent.push({ type: 'input_file', filename: file.name, file_data: await toDataUrl(file) });
-    } else if (file.type.startsWith('text/') || TEXT_FILE_PATTERN.test(name)) {
-      const fileText = await file.text();
-      inputContent.push({
-        type: 'input_text',
-        text: `Contenido del documento "${file.name}":\n${fileText.slice(0, 60_000)}`,
-      });
+  textLabel: string;
+}): Promise<Array<Record<string, unknown>>> => {
+  const content: Array<Record<string, unknown>> = [{ type: 'input_text', text: opts.prompt }];
+  if (opts.file) {
+    const name = opts.file.name.toLowerCase();
+    if (opts.file.type.startsWith('image/')) {
+      content.push({ type: 'input_image', image_url: await toDataUrl(opts.file), detail: 'high' });
+    } else if (opts.file.type === 'application/pdf' || name.endsWith('.pdf')) {
+      content.push({ type: 'input_file', filename: opts.file.name, file_data: await toDataUrl(opts.file) });
+    } else if (opts.file.type.startsWith('text/') || TEXT_FILE_PATTERN.test(name)) {
+      const fileText = await opts.file.text();
+      content.push({ type: 'input_text', text: `Contenido del documento "${opts.file.name}":\n${fileText.slice(0, 60_000)}` });
     } else {
       throw new Error(`Formato no soportado para análisis. Usa ${SUPPORTED_FILE_HINT}; si es un documento de Word/Office, conviértelo a PDF.`);
     }
   } else {
-    inputContent.push({ type: 'input_text', text: `Texto proporcionado por el usuario:\n${text?.trim() ?? ''}` });
+    content.push({ type: 'input_text', text: `${opts.textLabel}\n${opts.text?.trim() ?? ''}` });
   }
+  return content;
+};
 
-  const body = JSON.stringify({
-    model,
-    instructions: INSTRUCTIONS,
-    input: [{ role: 'user', content: inputContent }],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'accounting_document_analysis',
-        strict: true,
-        schema: ANALYSIS_SCHEMA,
-      },
-    },
-  });
-
-  // Un intento + un reintento ante errores transitorios (429/5xx). La
-  // operación es idempotente (solo genera un borrador), así que es seguro.
+// Llama a la Responses API con un intento + un reintento ante errores
+// transitorios (429/5xx) y devuelve el texto del modelo. El timeout cubre TODO
+// el ciclo (headers + cuerpo) para que la lectura no quede colgada ("se traba").
+const requestOpenAIText = async (body: string, apiKey: string): Promise<string> => {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 1200));
 
-    // Timeout que cubre TODO el ciclo (headers + cuerpo): leer el body fuera
-    // del try del fetch dejaba la lectura sin abort y la pantalla "se trababa".
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
@@ -340,10 +299,7 @@ export async function analyzeDocumentWithOpenAI(params: {
     try {
       response = await fetch(OPENAI_API_URL, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey.trim()}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${apiKey.trim()}`, 'Content-Type': 'application/json' },
         signal: controller.signal,
         body,
       });
@@ -352,7 +308,7 @@ export async function analyzeDocumentWithOpenAI(params: {
       clearTimeout(timer);
       if (error instanceof DOMException && error.name === 'AbortError') {
         throw new Error(
-          `La solicitud a OpenAI superó los ${OPENAI_TIMEOUT_MS / 1000}s y se canceló. Reintenta o usa una imagen/archivo más pequeño.`,
+          `La solicitud a OpenAI superó los ${OPENAI_TIMEOUT_MS / 1000}s y se canceló. Reintenta o usa un documento más pequeño.`,
           { cause: error }
         );
       }
@@ -364,8 +320,6 @@ export async function analyzeDocumentWithOpenAI(params: {
     }
     clearTimeout(timer);
 
-    // Lee el cuerpo como texto y luego intenta JSON: si el endpoint devolvió HTML
-    // (proxy mal configurado, 404), da un mensaje claro en vez de un error críptico.
     let payload: unknown = {};
     if (rawBody.trim()) {
       try {
@@ -406,9 +360,206 @@ export async function analyzeDocumentWithOpenAI(params: {
 
     const rawText = extractResponseText(payload);
     if (!rawText) throw new Error('La respuesta de OpenAI no incluyo texto utilizable');
-
-    return parseAnalysisDraft(rawText);
+    return rawText;
   }
 
   throw lastError ?? new Error(PRODUCTION_AI_ENDPOINT_MESSAGE);
+};
+
+export async function analyzeDocumentWithOpenAI(params: {
+  file?: File;
+  text?: string;
+  apiKey: string;
+  accounts: Account[];
+  empresa: Empresa;
+  model?: string;
+}): Promise<AIAnalysisDraft> {
+  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL } = params;
+  if (!apiKey.trim()) throw new Error('Falta la API key de OpenAI');
+  if (!file && !text?.trim()) {
+    throw new Error('Debes subir un archivo o escribir el contenido del documento');
+  }
+  if (file && file.size > MAX_ANALYSIS_FILE_BYTES) {
+    throw new Error(`El archivo excede el limite permitido (${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB)`);
+  }
+
+  const prompt = [
+    ...empresaContext(empresa),
+    'Catalogo de cuentas disponibles:',
+    buildAccountCatalog(accounts),
+    '',
+    'Analiza el documento y devuelve un borrador de partida contable.',
+    'Instrucciones:',
+    '- Si la empresa aparece como EMISOR de la factura, es una VENTA; si aparece como CLIENTE/RECEPTOR, es una COMPRA. Usa el NIT y la razón social para decidirlo.',
+    '- Calcula primero el TOTAL del documento; luego base = redondear(total / 1.12, 2) e IVA = total - base. Si el documento desglosa base e IVA, usa esos valores exactos.',
+    '- Devuelve cada código de cuenta EXACTAMENTE como aparece en el catálogo, incluyendo los puntos (ej. 2.1.05, nunca 2105 ni 2.1.5), y también el nombre exacto.',
+    '- Usa solo cuentas del catálogo de detalle; prefiere las cuentas específicas sobre las genéricas.',
+    '- Antes de responder verifica que la suma del Debe sea igual a la suma del Haber al centavo; si hay Q0.01 de diferencia por redondeo, ajústala en la línea de IVA.',
+    '- No repitas la misma cuenta en dos líneas: consolida los montos por cuenta.',
+    '- Si el archivo contiene varias facturas o documentos, genera la partida solo del documento principal e indícalo en observaciones.',
+    '- Si falta algún dato de texto (fecha, contraparte), deja el campo vacío; los montos nunca se inventan: si no puedes leer el monto total, devuelve confidence menor a 0.3 y explica el problema en observaciones.',
+    '- Las fechas parciales ("15 de abril") se completan con el año del período fiscal; las relativas ("ayer") se resuelven con la fecha de hoy.',
+  ].join('\n');
+
+  const content = await buildUserContent({ prompt, file, text, textLabel: 'Texto proporcionado por el usuario:' });
+  const body = JSON.stringify({
+    model,
+    instructions: INSTRUCTIONS,
+    input: [{ role: 'user', content }],
+    text: {
+      format: { type: 'json_schema', name: 'accounting_document_analysis', strict: true, schema: ANALYSIS_SCHEMA },
+    },
+  });
+
+  const rawText = await requestOpenAIText(body, apiKey);
+  return parseAnalysisDraft(rawText);
+}
+
+/* ============================ Ejercicio completo ============================ */
+
+export interface AIExercisePartida {
+  fecha: string;
+  concepto: string;
+  observaciones: string;
+  lineas: AIAnalysisLine[];
+}
+
+export interface AIExerciseResult {
+  capitalInicial: number;
+  resumen: string;
+  partidas: AIExercisePartida[];
+}
+
+const LINEA_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    cuenta_codigo: { type: 'string' },
+    cuenta_nombre: { type: 'string' },
+    debe: { type: 'number' },
+    haber: { type: 'number' },
+    concepto_linea: { type: 'string' },
+  },
+  required: ['cuenta_codigo', 'cuenta_nombre', 'debe', 'haber', 'concepto_linea'],
+} as const;
+
+const EXERCISE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    capitalInicial: { type: 'number' },
+    resumen: { type: 'string' },
+    partidas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          fecha: { type: 'string' },
+          concepto: { type: 'string' },
+          observaciones: { type: 'string' },
+          lineas: { type: 'array', items: LINEA_SCHEMA },
+        },
+        required: ['fecha', 'concepto', 'observaciones', 'lineas'],
+      },
+    },
+  },
+  required: ['capitalInicial', 'resumen', 'partidas'],
+} as const;
+
+const APERTURA_RULES = [
+  'Estás resolviendo un EJERCICIO CONTABLE COMPLETO: el enunciado trae unos saldos iniciales (inventario inicial) y luego una lista de operaciones del período.',
+  'Genera SIEMPRE, como PRIMERA partida del arreglo, la PARTIDA DE APERTURA con los saldos iniciales:',
+  '- Carga al DEBE cada cuenta de ACTIVO por su saldo. Mapeo: Inventario/Mercaderías → 1.1.13; Caja → 1.1.01; Bancos → 1.1.03; Clientes → 1.1.05; Documentos por Cobrar → 1.1.07; Mobiliario y Equipo → 1.2.04; Equipo de Computación → 1.2.05; Vehículos/Vehículo → 1.2.06; Maquinaria → 1.2.07; Edificios → 1.2.03; Terrenos → 1.2.02.',
+  '- Abona al HABER cada cuenta de PASIVO por su saldo. Mapeo: Proveedores → 2.1.01; Acreedores → 2.1.02; Cuentas por Pagar → 2.1.03; Documentos por Pagar → 2.1.04.',
+  '- El CAPITAL es la diferencia: capital = (suma de activos) − (suma de pasivos). Abónalo al HABER en 3.1.01 Capital. El campo "capitalInicial" del JSON debe ser ese número exacto.',
+  '- Si el enunciado NO da el monto del capital (lo pide calcular), calcúlalo tú con esa diferencia. La partida de apertura SIEMPRE debe cuadrar (Debe = Haber).',
+  'Después de la apertura, genera UNA partida por CADA operación del período, en orden de fecha, aplicando las reglas del método (IVA 12% separado, devoluciones, planilla IGSS, etc.).',
+  'El arreglo "partidas" va en orden cronológico (apertura primero). Cada partida debe cuadrar al centavo.',
+  'Usa el año del período fiscal para todas las fechas. Respeta el día y mes indicados en cada operación aunque el enunciado mezcle nombres de meses.',
+  'En "resumen" escribe una frase con el capital inicial y cuántas operaciones procesaste.',
+].join('\n');
+
+const EXERCISE_INSTRUCTIONS = `${SYSTEM_PROMPT}\n\n${APERTURA_RULES}\n\nEJEMPLOS RESUELTOS CON EL MÉTODO EXACTO (imítalos en estructura, códigos y cuadre):\n\n${FEW_SHOT_EXAMPLES}`;
+
+const parseExerciseResult = (raw: string): AIExerciseResult => {
+  const text = raw.trim();
+  const jsonStart = text.indexOf('{');
+  const jsonEnd = text.lastIndexOf('}');
+  const candidate = jsonStart >= 0 && jsonEnd > jsonStart ? text.slice(jsonStart, jsonEnd + 1) : text;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch (err) {
+    throw new Error('La IA no devolvió JSON válido. Reintenta el análisis.', { cause: err });
+  }
+
+  const obj = parsed as AIExerciseResult;
+  if (!obj || typeof obj !== 'object' || !Array.isArray(obj.partidas)) {
+    throw new Error('La respuesta de la IA no tiene el formato esperado (falta el arreglo de partidas).');
+  }
+
+  return {
+    capitalInicial: typeof obj.capitalInicial === 'number' ? obj.capitalInicial : 0,
+    resumen: typeof obj.resumen === 'string' ? obj.resumen : '',
+    partidas: obj.partidas.map(p => ({
+      fecha: typeof p?.fecha === 'string' ? p.fecha : '',
+      concepto: typeof p?.concepto === 'string' ? p.concepto : '',
+      observaciones: typeof p?.observaciones === 'string' ? p.observaciones : '',
+      lineas: Array.isArray(p?.lineas)
+        ? p.lineas.map(line => ({
+            cuenta_codigo: typeof line?.cuenta_codigo === 'string' ? line.cuenta_codigo.trim() : '',
+            cuenta_nombre: typeof line?.cuenta_nombre === 'string' ? line.cuenta_nombre : undefined,
+            debe: Number(line?.debe) || 0,
+            haber: Number(line?.haber) || 0,
+            concepto_linea: typeof line?.concepto_linea === 'string' ? line.concepto_linea : undefined,
+          }))
+        : [],
+    })),
+  };
+};
+
+/**
+ * Resuelve un EJERCICIO CONTABLE COMPLETO: genera la partida de apertura
+ * (calculando el capital inicial) y una partida por cada operación.
+ */
+export async function analyzeExerciseWithOpenAI(params: {
+  file?: File;
+  text?: string;
+  apiKey: string;
+  accounts: Account[];
+  empresa: Empresa;
+  model?: string;
+}): Promise<AIExerciseResult> {
+  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL } = params;
+  if (!apiKey.trim()) throw new Error('Falta la API key de OpenAI');
+  if (!file && !text?.trim()) {
+    throw new Error('Debes subir el enunciado o escribir el ejercicio completo');
+  }
+  if (file && file.size > MAX_ANALYSIS_FILE_BYTES) {
+    throw new Error(`El archivo excede el limite permitido (${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB)`);
+  }
+
+  const prompt = [
+    ...empresaContext(empresa),
+    'Catalogo de cuentas disponibles:',
+    buildAccountCatalog(accounts),
+    '',
+    'Resuelve el SIGUIENTE EJERCICIO CONTABLE COMPLETO. Genera la partida de apertura con los saldos iniciales (calcula el capital como activos − pasivos) y luego UNA partida por cada operación, todas cuadradas, siguiendo el método.',
+    'Devuelve el arreglo "partidas" en orden cronológico, la apertura primero, con códigos y nombres exactos del catálogo.',
+  ].join('\n');
+
+  const content = await buildUserContent({ prompt, file, text, textLabel: 'Enunciado del ejercicio:' });
+  const body = JSON.stringify({
+    model,
+    instructions: EXERCISE_INSTRUCTIONS,
+    input: [{ role: 'user', content }],
+    text: {
+      format: { type: 'json_schema', name: 'accounting_exercise', strict: true, schema: EXERCISE_SCHEMA },
+    },
+  });
+
+  const rawText = await requestOpenAIText(body, apiKey);
+  return parseExerciseResult(rawText);
 }
