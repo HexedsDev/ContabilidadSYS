@@ -103,9 +103,9 @@ export function LibroDiario() {
                 <button
                   key={opt.value}
                   onClick={() => setFilter(opt.value)}
-                  className={`px-3 h-9 text-xs font-medium rounded-md border transition-all ${
+                  className={`px-3 h-9 text-xs font-medium rounded-sm border transition-colors ring-focus ${
                     filter === opt.value
-                      ? 'bg-primary-600 text-white border-primary-600 shadow-soft'
+                      ? 'bg-primary-600 text-white border-primary-600'
                       : 'bg-surface border-border-strong text-text-muted hover:text-text-main hover:border-text-subtle'
                   }`}
                 >
@@ -142,11 +142,11 @@ export function LibroDiario() {
                     key={entry.id}
                     className="border border-border-soft rounded-sm overflow-hidden bg-surface page-break-inside-avoid"
                   >
-                    <div className="bg-surface-soft px-4 py-3 flex items-center justify-between border-b border-border-soft flex-wrap gap-3">
+                    <div className="bg-surface-soft px-4 py-2.5 flex items-center justify-between border-b border-border-soft flex-wrap gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-sm bg-primary-600 text-white flex items-center justify-center font-mono text-xs font-bold shrink-0">
-                          #{entry.numero}
-                        </div>
+                        <span className="font-mono text-xs font-semibold text-text-muted shrink-0">
+                          N.º {entry.numero}
+                        </span>
                         <div className="min-w-0">
                           <p className="font-semibold text-text-main text-sm truncate">{entry.concepto}</p>
                           <p className="text-xs text-text-muted">{formatDate(entry.fecha)}</p>
@@ -175,7 +175,7 @@ export function LibroDiario() {
                         )}
                         <button
                           onClick={() => navigate('/app/registrar', { state: { entryId: entry.id } })}
-                          className="p-1.5 hover:bg-surface text-text-muted hover:text-primary-600 rounded-md transition-colors"
+                          className="p-1.5 hover:bg-surface text-text-muted hover:text-primary-600 rounded-sm transition-colors ring-focus"
                           title="Editar"
                         >
                           <Edit className="w-4 h-4" />
@@ -183,7 +183,7 @@ export function LibroDiario() {
                         {entry.estado === 'contabilizada' && (
                           <button
                             onClick={() => setVoidId(entry.id)}
-                            className="p-1.5 hover:bg-warning-soft text-text-muted hover:text-warning rounded-md transition-colors"
+                            className="p-1.5 hover:bg-warning-soft text-text-muted hover:text-warning rounded-sm transition-colors ring-focus"
                             title="Anular (mantiene trazabilidad)"
                           >
                             <Ban className="w-4 h-4" />
@@ -191,7 +191,7 @@ export function LibroDiario() {
                         )}
                         <button
                           onClick={() => setDeleteId(entry.id)}
-                          className="p-1.5 hover:bg-error-soft text-text-muted hover:text-error rounded-md transition-colors"
+                          className="p-1.5 hover:bg-error-soft text-text-muted hover:text-error rounded-sm transition-colors ring-focus"
                           title="Eliminar permanentemente"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -211,18 +211,15 @@ export function LibroDiario() {
                         </thead>
                         <tbody>
                           {entry.lineas.map(line => (
-                            <tr
-                              key={line.id}
-                              className="border-b border-border-soft/50 last:border-0 hover:bg-surface-soft/40 transition-colors"
-                            >
-                              <td className="px-4 py-2 font-mono text-xs text-primary-600 dark:text-primary-300">{line.cuenta_codigo}</td>
-                              <td className={`px-4 py-2 text-text-main ${line.haber > 0 ? 'pl-10' : ''}`}>
+                            <tr key={line.id} className="border-b border-border-soft/50 last:border-0">
+                              <td className="px-4 py-1.5 font-mono text-xs text-text-muted">{line.cuenta_codigo}</td>
+                              <td className={`px-4 py-1.5 text-text-main ${line.haber > 0 ? 'pl-10' : ''}`}>
                                 {accountName(line.cuenta_codigo)}
                               </td>
-                              <td className="px-4 py-2 text-right text-text-main tabular-nums">
+                              <td className="px-4 py-1.5 text-right text-text-main tabular-nums">
                                 {line.debe > 0 ? formatCurrency(line.debe) : <span className="text-text-subtle">—</span>}
                               </td>
-                              <td className="px-4 py-2 text-right text-text-main tabular-nums">
+                              <td className="px-4 py-1.5 text-right text-text-main tabular-nums">
                                 {line.haber > 0 ? formatCurrency(line.haber) : <span className="text-text-subtle">—</span>}
                               </td>
                             </tr>
@@ -230,11 +227,11 @@ export function LibroDiario() {
                         </tbody>
                         <tfoot className="bg-surface-soft border-t border-border-soft">
                           <tr>
-                            <td colSpan={2} className="px-4 py-3 text-xs italic text-text-muted">
+                            <td colSpan={2} className="px-4 py-2.5 text-xs italic text-text-muted">
                               {entry.observaciones || '—'}
                             </td>
-                            <td className="px-4 py-3 text-right font-bold text-text-main tabular-nums">{formatCurrency(totalDebe)}</td>
-                            <td className="px-4 py-3 text-right font-bold text-text-main tabular-nums">{formatCurrency(totalHaber)}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-text-main tabular-nums">{formatCurrency(totalDebe)}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-text-main tabular-nums">{formatCurrency(totalHaber)}</td>
                           </tr>
                         </tfoot>
                       </table>

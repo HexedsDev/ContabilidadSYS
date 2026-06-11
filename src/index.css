@@ -4,16 +4,17 @@
 
 @theme {
   /* === Brand Palette === */
-  --color-primary-50:  #eef4ff;
-  --color-primary-100: #dae6ff;
-  --color-primary-200: #b8ceff;
-  --color-primary-300: #8aabff;
-  --color-primary-400: #5b81ff;
-  --color-primary-500: #3b5fff;
-  --color-primary-600: #2942e6;
-  --color-primary-700: #1f33b4;
-  --color-primary-800: #1c2c8c;
-  --color-primary-900: #1a2870;
+  /* Azul tinta desaturado: confiable y sobrio, sin el azul eléctrico de plantilla */
+  --color-primary-50:  #f1f4fa;
+  --color-primary-100: #dfe6f4;
+  --color-primary-200: #bcc9e4;
+  --color-primary-300: #93a7d6;
+  --color-primary-400: #5d77c2;
+  --color-primary-500: #3a55b8;
+  --color-primary-600: #2c44a0;
+  --color-primary-700: #243a85;
+  --color-primary-800: #1e2f68;
+  --color-primary-900: #182550;
 
   --color-secondary-50:  #ecfdf5;
   --color-secondary-100: #d1fae5;
@@ -52,44 +53,44 @@
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 
   /* === Radius & Shadows === */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  /* Radios contenidos: bordes nítidos de producto contable, no de tarjeta social */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 
   --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
   --shadow-md:   0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
   --shadow-lg:   0 12px 24px -8px rgba(15, 23, 42, 0.12), 0 4px 8px -4px rgba(15, 23, 42, 0.06);
   --shadow-xl:   0 24px 48px -12px rgba(15, 23, 42, 0.18);
-  --shadow-glow: 0 0 0 4px rgba(59, 95, 255, 0.15);
 }
 
-/* === Dark mode: true black with subtle gray accents === */
+/* === Dark mode: gris-azulado entintado === */
 .dark {
-  /* Pure black background, layered grays for depth */
-  --color-background: #000000;
-  --color-surface: #0a0a0a;
-  --color-surface-soft: #141414;
-  --color-border-soft: #1f1f1f;
-  --color-border-strong: #2e2e2e;
+  /* Negro/blanco puros producen halation y delatan plantilla; los productos
+     financieros serios usan superficies entintadas con contraste contenido. */
+  --color-background: #0d1014;
+  --color-surface: #13161c;
+  --color-surface-soft: #1a1e26;
+  --color-border-soft: #252a33;
+  --color-border-strong: #39404d;
 
-  /* Text: pure white for max contrast on black */
-  --color-text-main: #ffffff;
-  --color-text-muted: #a3a3a3;
-  --color-text-subtle: #6b6b6b;
+  --color-text-main: #e8eaf0;
+  --color-text-muted: #9aa2b1;
+  --color-text-subtle: #6a7282;
 
-  /* Primary scale on black: brighter blue pops */
-  --color-primary-50:  #141a3d;
-  --color-primary-100: #1a2452;
-  --color-primary-200: #2e4080;
-  --color-primary-300: #6580ff;
-  --color-primary-400: #7a93ff;
-  --color-primary-500: #8aa3ff;
-  --color-primary-600: #5b7dff;
-  --color-primary-700: #3b5fff;
+  /* Primario sobre fondo oscuro: azul tinta desaturado, legible sin brillar */
+  --color-primary-50:  #161c2e;
+  --color-primary-100: #1c2440;
+  --color-primary-200: #2b3a66;
+  --color-primary-300: #8fa3dd;
+  --color-primary-400: #9eafe2;
+  --color-primary-500: #aab9e8;
+  --color-primary-600: #6e86cc;
+  --color-primary-700: #4a63b0;
 
-  /* Semantic soft backgrounds — slightly stronger to pop on black */
+  /* Semantic soft backgrounds — slightly stronger to pop on dark */
   --color-success-soft: rgba(34, 197, 94, 0.15);
   --color-warning-soft: rgba(245, 158, 11, 0.15);
   --color-error-soft: rgba(248, 113, 113, 0.15);
@@ -106,6 +107,11 @@
   body {
     @apply bg-background text-text-main font-sans antialiased;
     font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  /* Los montos en tablas contables alinean por dígito aunque a una celda
+     le falte la clase tabular-nums */
+  table {
+    font-variant-numeric: tabular-nums lining-nums;
   }
   h1, h2, h3, h4 {
     @apply tracking-tight;
@@ -129,31 +135,16 @@
 
 /* === Utility classes === */
 @layer utilities {
-  .glass {
-    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-    backdrop-filter: saturate(140%) blur(12px);
-    -webkit-backdrop-filter: saturate(140%) blur(12px);
-  }
-  .gradient-primary {
-    background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700));
-  }
-  .gradient-secondary {
-    background: linear-gradient(135deg, var(--color-secondary-500), var(--color-secondary-700));
-  }
-  .gradient-text {
-    background: linear-gradient(135deg, var(--color-primary-600), var(--color-secondary-600));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
   .ring-focus {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
-  .grid-pattern {
-    background-image:
-      linear-gradient(to right, color-mix(in srgb, var(--color-border-soft) 70%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in srgb, var(--color-border-soft) 70%, transparent) 1px, transparent 1px);
-    background-size: 24px 24px;
+  /* Convención de estados financieros impresos: línea simple arriba y doble
+     subrayado bajo el total final */
+  .total-final {
+    border-top: 1px solid currentColor;
+    border-bottom: 3px double currentColor;
+    padding-top: 2px;
+    padding-bottom: 2px;
   }
 }
 
@@ -174,11 +165,11 @@
   background: var(--color-text-subtle);
 }
 .dark ::-webkit-scrollbar-thumb {
-  background: #2e2e2e;
-  border-color: #000000;
+  background: #39404d;
+  border-color: #0d1014;
 }
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
+  background: #4a5260;
 }
 
 /* === Animations === */

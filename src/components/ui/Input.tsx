@@ -34,7 +34,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <div
           className={cn(
             'flex items-center w-full bg-surface border rounded-sm transition-all duration-150 overflow-hidden',
-            'focus-within:ring-2 focus-within:ring-primary-500/30 focus-within:border-primary-500',
+            'focus-within:ring-2 focus-within:ring-primary-500/40 focus-within:border-primary-500',
             error
               ? 'border-error focus-within:ring-error/30 focus-within:border-error'
               : 'border-border-strong hover:border-text-subtle',
@@ -106,7 +106,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           className={cn(
             'block w-full bg-surface border rounded-sm px-3 py-2.5 text-sm outline-none transition-all',
             'placeholder:text-text-subtle text-text-main resize-y min-h-[80px]',
-            'focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500',
+            'focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500',
             error
               ? 'border-error focus:ring-error/30 focus:border-error'
               : 'border-border-strong hover:border-text-subtle',

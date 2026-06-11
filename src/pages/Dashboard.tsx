@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Wallet,
   Scale,
-  Sparkles,
+  Database,
   ArrowRight,
   Building2,
   CreditCard,
@@ -92,7 +92,7 @@ export function Dashboard() {
         actions={
           <>
             {entries.length === 0 && (
-              <Button variant="subtle" leftIcon={<Sparkles className="w-4 h-4" />} onClick={handleLoadDemo}>
+              <Button variant="subtle" leftIcon={<Database className="w-4 h-4" />} onClick={handleLoadDemo}>
                 Cargar demo
               </Button>
             )}
@@ -129,10 +129,10 @@ export function Dashboard() {
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Partidas" value={formatNumber(stats.total).replace(/[,.]00$/, '')} icon={Activity} tone="info" delay={0.05} />
-        <StatCard label="Contabilizadas" value={stats.posted} icon={BookCheck} tone="success" delay={0.1} />
-        <StatCard label="Observadas" value={stats.observed} icon={BookX} tone="warning" delay={0.15} />
-        <StatCard label="Alertas activas" value={stats.activeAlerts} icon={AlertTriangle} tone={stats.activeAlerts > 0 ? 'error' : 'neutral'} delay={0.2} />
+        <StatCard label="Total Partidas" value={formatNumber(stats.total).replace(/[,.]00$/, '')} icon={Activity} tone="info" />
+        <StatCard label="Contabilizadas" value={stats.posted} icon={BookCheck} tone="success" />
+        <StatCard label="Observadas" value={stats.observed} icon={BookX} tone="warning" />
+        <StatCard label="Alertas activas" value={stats.activeAlerts} icon={AlertTriangle} tone={stats.activeAlerts > 0 ? 'error' : 'neutral'} />
       </div>
 
       {/* Razones financieras */}
@@ -179,7 +179,7 @@ export function Dashboard() {
                 description="Empieza creando una partida o carga datos de prueba"
                 action={
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" leftIcon={<Sparkles className="w-4 h-4" />} onClick={handleLoadDemo}>
+                    <Button variant="outline" size="sm" leftIcon={<Database className="w-4 h-4" />} onClick={handleLoadDemo}>
                       Cargar demo
                     </Button>
                     <Button size="sm" onClick={() => navigate('/app/registrar')}>
@@ -266,7 +266,7 @@ export function Dashboard() {
 function Ratio({ label, value, hint, good }: { label: string; value: string; hint: string; good: boolean }) {
   return (
     <div className="border-l-2 border-border-soft pl-3">
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-text-subtle">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide font-semibold text-text-subtle">{label}</p>
       <p className={`text-xl font-bold tabular-nums mt-1 ${good ? 'text-success' : 'text-error'}`}>{value}</p>
       <p className="text-[10px] text-text-muted mt-0.5">{hint}</p>
     </div>

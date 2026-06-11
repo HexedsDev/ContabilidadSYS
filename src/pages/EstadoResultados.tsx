@@ -55,8 +55,8 @@ export function EstadoResultados() {
           <CardContent className="py-2">
             <EmptyState
               icon={TrendingUp}
-              title="Sin datos"
-              description="Registra ventas, compras y gastos para generar el estado de resultados"
+              title="Sin movimientos de resultados en el período"
+              description="Registra ventas, compras o gastos en el Libro Diario para generar este estado"
             />
           </CardContent>
         </Card>
@@ -162,8 +162,8 @@ export function EstadoResultados() {
 
 function Group({ title }: { title: string }) {
   return (
-    <div className="px-5 py-2.5 bg-surface-soft border-y border-border-soft">
-      <h3 className="text-xs uppercase tracking-widest font-bold text-text-subtle">{title}</h3>
+    <div className="px-5 py-2 bg-surface-soft border-y border-border-soft">
+      <h3 className="text-[11px] uppercase tracking-wider font-semibold text-text-muted">{title}</h3>
     </div>
   );
 }
@@ -182,7 +182,7 @@ function Line({
   muted?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between px-5 py-2 hover:bg-surface-soft/40 transition-colors">
+    <div className="flex items-center justify-between px-5 py-2">
       <div className="flex items-center gap-2.5 min-w-0">
         {codigo && <span className="font-mono text-[10px] text-text-subtle w-14 shrink-0">{codigo}</span>}
         <span className="text-sm text-text-main truncate">{label}</span>
@@ -197,10 +197,11 @@ function Line({
 }
 
 function Subtotal({ label, value, subtract }: { label: string; value: number; subtract?: boolean }) {
+  // Convención impresa: línea simple sobre el monto del subtotal, sin fondos.
   return (
-    <div className="flex items-center justify-between px-5 py-2.5 bg-surface-soft/60 border-b border-border-soft">
+    <div className="flex items-center justify-between px-5 py-2 border-b border-border-soft">
       <span className="text-xs uppercase tracking-wider font-semibold text-text-muted">{label}</span>
-      <span className="text-sm font-bold tabular-nums text-text-main">
+      <span className="text-sm font-bold tabular-nums text-text-main border-t border-text-main/60 pt-0.5">
         {subtract && '('}
         {formatCurrency(value)}
         {subtract && ')'}
@@ -220,19 +221,19 @@ function BigTotal({
   tone: 'primary' | 'success' | 'error';
   highlight?: boolean;
 }) {
+  // Los totales de un estado financiero van en tinta neutra; solo el resultado
+  // final conserva el verde/rojo semántico y el doble subrayado contable.
   const toneColors = {
-    primary: 'text-primary-700 dark:text-primary-300',
+    primary: 'text-text-main',
     success: 'text-success',
     error: 'text-error',
   };
   return (
-    <div
-      className={`flex items-center justify-between px-5 py-3.5 border-t-2 ${
-        highlight ? 'border-primary-500/40 bg-primary-50 dark:bg-primary-100/10' : 'border-border-soft'
-      }`}
-    >
+    <div className="flex items-center justify-between px-5 py-3.5 border-t border-border-soft">
       <span className={`text-sm uppercase tracking-wider font-bold ${toneColors[tone]}`}>{label}</span>
-      <span className={`text-lg font-bold tabular-nums ${toneColors[tone]}`}>{formatCurrency(value)}</span>
+      <span className={`text-lg font-bold tabular-nums ${toneColors[tone]} ${highlight ? 'total-final' : ''}`}>
+        {formatCurrency(value)}
+      </span>
     </div>
   );
 }

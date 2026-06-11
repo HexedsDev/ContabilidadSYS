@@ -12,8 +12,10 @@ const variantClasses: Record<CardVariant, string> = {
   default: 'bg-surface border border-border-soft shadow-soft',
   elevated: 'bg-surface border border-border-soft shadow-md',
   flat: 'bg-surface-soft border border-transparent',
-  glass: 'glass border border-border-soft',
-  gradient: 'gradient-primary text-white border-0 shadow-lg',
+  // Variantes heredadas: se mantienen en el tipo pero sin efectos de plantilla
+  // (vidrio/gradiente) — superficies planas de producto contable.
+  glass: 'bg-surface border border-border-soft shadow-md',
+  gradient: 'bg-surface border border-border-soft shadow-soft',
 };
 
 export function Card({ className, variant = 'default', hoverable, ...props }: CardProps) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, Save, Bot, KeyRound, Sparkles, Percent } from 'lucide-react';
+import { Building2, Save, Bot, KeyRound, Percent } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Card, CardContent } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -214,7 +214,7 @@ export function Configuracion() {
           </div>
 
           <div className="flex items-center gap-2 text-xs text-text-muted">
-            <Sparkles className="w-3.5 h-3.5" />
+            <Bot className="w-3.5 h-3.5" />
             <span>La carga del documento se hace desde Registrar Partida.</span>
           </div>
         </CardContent>

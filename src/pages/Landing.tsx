@@ -7,12 +7,9 @@ import {
   ShieldCheck,
   FileText,
   ReceiptText,
-  Mouse,
 } from 'lucide-react';
-import { ParticleTextEffect } from '../components/ui/particle-text-effect';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { motion } from 'framer-motion';
 
 const features = [
   {
@@ -52,7 +49,7 @@ export function Landing() {
   const detailsRef = useRef<HTMLElement>(null);
 
   return (
-    <div className="dark min-h-screen bg-[#040712] text-white">
+    <div className="dark min-h-screen bg-[#0d1014] text-white">
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -76,35 +73,32 @@ export function Landing() {
       </header>
 
       <main>
-        <section className="relative min-h-screen overflow-hidden">
-          <div className="absolute inset-0">
-            <ParticleTextEffect
-              words={['CONTABILIDAD', 'ORDEN', 'CONTROL', 'CIERRE']}
-              className="absolute inset-0 h-full w-full !rounded-none !border-0 !bg-transparent opacity-80"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#040712]/10 via-[#040712]/28 to-[#040712] pointer-events-none" />
-          </div>
-
-          <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl items-end justify-center px-4 pb-10 pt-28 sm:px-6 lg:px-8">
-            <div className="flex flex-col items-center gap-5">
-              <motion.button
-                type="button"
+        <section className="border-b border-white/10">
+          <div className="mx-auto max-w-7xl px-4 pt-40 pb-24 sm:px-6 lg:px-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">
+              Sistema contable · Guatemala
+            </p>
+            <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+              Contabilidad clara, de la partida de apertura al cierre
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-white/65">
+              Registra partidas con el IVA separado, lleva los libros al día y genera Estado de
+              Resultados y Balance General con ISR y reserva legal calculados automáticamente.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button onClick={() => navigate('/login')}>Iniciar sesión</Button>
+              <Button
+                variant="outline"
+                className="border-white/15 bg-transparent text-white hover:bg-white/10"
                 onClick={() => detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="flex flex-col items-center gap-2 text-white/62 hover:text-white transition-colors"
-                animate={{ y: [0, 8, 0] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-                aria-label="Desplazarse hacia abajo"
               >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/5">
-                  <Mouse className="h-4 w-4" />
-                </div>
-                <span className="text-[11px] uppercase tracking-[0.25em]">Scroll</span>
-              </motion.button>
+                Ver funciones
+              </Button>
             </div>
           </div>
         </section>
 
-        <section ref={detailsRef} className="border-t border-white/10 bg-[#060b16]">
+        <section ref={detailsRef} className="bg-[#10141b]">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/45">Que puede hacer el sistema</p>
@@ -117,9 +111,9 @@ export function Landing() {
 
             <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {features.map(feature => (
-                <Card key={feature.title} className="border-white/10 bg-white/5 text-white backdrop-blur">
+                <Card key={feature.title} className="border-white/10 bg-white/[0.04] text-white">
                   <CardContent className="pt-6">
-                    <feature.icon className="h-5 w-5 text-emerald-300" />
+                    <feature.icon className="h-5 w-5 text-primary-300" />
                     <h3 className="mt-5 text-base font-semibold">{feature.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-white/62">{feature.text}</p>
                   </CardContent>
@@ -130,7 +124,7 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="border-t border-white/10 bg-[#040712]">
+      <footer className="border-t border-white/10 bg-[#0d1014]">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 text-sm text-white/55 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <p>ContabilidadSys para registro, control y reportes contables.</p>
           <button className="text-left text-white/75 hover:text-white transition-colors" onClick={() => navigate('/login')}>

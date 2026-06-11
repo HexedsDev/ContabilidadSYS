@@ -17,7 +17,7 @@ import {
   Calendar,
   CheckCircle2,
   Scale,
-  Sparkles,
+  Bot,
   FileText,
   Loader2,
   Upload,
@@ -456,7 +456,7 @@ export function RegistrarPartida() {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-primary-600" />
+                  <Bot className="w-4 h-4 text-primary-600" />
                   <h2 className="text-sm font-semibold text-text-main">Analizar documento con IA</h2>
                 </div>
                 <p className="text-sm text-text-muted mt-1">

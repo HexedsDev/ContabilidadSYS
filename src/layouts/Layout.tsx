@@ -20,7 +20,6 @@ import {
   Moon,
   Monitor,
   Database,
-  Sparkles,
   Settings,
   Users,
   LogOut,
@@ -138,7 +137,7 @@ export function Layout() {
       {Object.entries(groupedNav).map(([section, items]) => (
         <div key={section}>
           {!sidebarCollapsed && (
-            <p className="px-3 text-[10px] font-semibold tracking-widest text-text-subtle uppercase mb-2">
+            <p className="px-3 text-[11px] font-medium tracking-wider text-text-subtle uppercase mb-2">
               {section}
             </p>
           )}
@@ -219,7 +218,7 @@ export function Layout() {
             title="Cargar demo"
             className="w-full flex items-center justify-center px-0 py-2 rounded-sm text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:bg-secondary-50 dark:hover:bg-secondary-100/10 transition-colors"
           >
-            <Sparkles className="w-4 h-4 shrink-0" />
+            <Database className="w-4 h-4 shrink-0" />
           </button>
           <button
             onClick={() => setConfirmOpen(true)}
@@ -243,7 +242,7 @@ export function Layout() {
               onClick={handleLoadDemo}
               className="min-w-0 flex items-center justify-center gap-2 px-2 py-2 rounded-sm text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:bg-secondary-50 dark:hover:bg-secondary-100/10 transition-colors"
             >
-              <Sparkles className="w-4 h-4 shrink-0" />
+              <Database className="w-4 h-4 shrink-0" />
               <span className="truncate">Cargar demo</span>
             </button>
             <button
@@ -300,7 +299,7 @@ export function Layout() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
-              className="md:hidden fixed inset-0 bg-slate-950/60 z-40 backdrop-blur-sm"
+              className="md:hidden fixed inset-0 bg-slate-950/50 z-40"
             />
             <motion.aside
               initial={{ x: -300 }}
@@ -314,7 +313,7 @@ export function Layout() {
                   <img src="/logo.svg" alt="Sistema Contable" className="w-9 h-9 shrink-0" />
                   <p className="text-sm font-bold tracking-tight">Contabilidad</p>
                 </div>
-                <button onClick={() => setMobileOpen(false)} className="p-2 rounded-md hover:bg-surface-soft">
+                <button onClick={() => setMobileOpen(false)} className="p-2 rounded-sm hover:bg-surface-soft ring-focus">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -326,18 +325,18 @@ export function Layout() {
       </AnimatePresence>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-surface/80 backdrop-blur border-b border-border-soft flex items-center px-4 sm:px-6 justify-between shrink-0">
+        <header className="h-16 bg-surface border-b border-border-soft flex items-center px-4 sm:px-6 justify-between shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
-              className="md:hidden p-2 rounded-md text-text-muted hover:bg-surface-soft transition-colors"
+              className="md:hidden p-2 rounded-sm text-text-muted hover:bg-surface-soft transition-colors ring-focus"
               aria-label="Abrir menú"
             >
               <Menu className="w-5 h-5" />
             </button>
             <button
               onClick={toggleSidebar}
-              className="hidden md:inline-flex p-2 rounded-md text-text-muted hover:bg-surface-soft transition-colors"
+              className="hidden md:inline-flex p-2 rounded-sm text-text-muted hover:bg-surface-soft transition-colors ring-focus"
               aria-label="Colapsar barra lateral"
             >
               <Menu className="w-5 h-5" />
@@ -355,7 +354,7 @@ export function Layout() {
             <div className="relative">
               <button
                 onClick={() => setThemeOpen(v => !v)}
-                className="p-2 rounded-md text-text-muted hover:bg-surface-soft transition-colors ring-focus"
+                className="p-2 rounded-sm text-text-muted hover:bg-surface-soft transition-colors ring-focus"
                 aria-label="Cambiar tema"
               >
                 {theme === 'dark' ? <Moon className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} /> : theme === 'light' ? <Sun className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} /> : <Monitor className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />}
@@ -403,7 +402,7 @@ export function Layout() {
                 </p>
                 <p className="text-[10px] text-text-muted mt-0.5">NIT {empresa.nit}</p>
               </div>
-              <div className="w-9 h-9 rounded bg-primary-600 text-white flex items-center justify-center font-bold text-sm">
+              <div className="w-9 h-9 rounded-sm bg-primary-600 text-white flex items-center justify-center font-bold text-sm">
                 {empresa.razon_social.slice(0, 2).toUpperCase()}
               </div>
             </div>

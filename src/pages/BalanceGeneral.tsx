@@ -48,8 +48,8 @@ export function BalanceGeneral() {
           <CardContent className="py-2">
             <EmptyState
               icon={PieChart}
-              title="Sin datos"
-              description="Registra partidas y ejecuta el cierre para generar el balance general"
+              title="El balance aún no tiene saldos"
+              description="Registra la partida de apertura y contabiliza movimientos para construir el Balance General"
             />
           </CardContent>
         </Card>
@@ -122,11 +122,12 @@ export function BalanceGeneral() {
   );
 }
 
-function Band({ title, tone }: { title: string; tone: 'primary' | 'warning' }) {
-  const cls = tone === 'primary' ? 'bg-primary-700' : 'bg-warning';
+// Cabecera de estado financiero impreso: regla gruesa bajo el título, sin
+// banners de color que parezcan plantilla.
+function Band({ title }: { title: string; tone?: 'primary' | 'warning' }) {
   return (
-    <div className={`px-5 py-3 ${cls} text-white`}>
-      <h2 className="text-sm font-bold uppercase tracking-widest">{title}</h2>
+    <div className="px-5 py-2.5 border-b-2 border-text-main/80">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-main">{title}</h2>
     </div>
   );
 }
@@ -134,19 +135,19 @@ function Band({ title, tone }: { title: string; tone: 'primary' | 'warning' }) {
 function SubGroup({ title }: { title: string }) {
   return (
     <div className="px-5 py-2 bg-surface-soft border-y border-border-soft">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{title}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{title}</p>
     </div>
   );
 }
 
 function MiniLabel({ text }: { text: string }) {
-  return <p className="px-5 pt-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-text-subtle">{text}</p>;
+  return <p className="px-5 pt-2 pb-1 text-[11px] uppercase tracking-wide font-semibold text-text-subtle">{text}</p>;
 }
 
 function Row({ item, italic }: { item: LineItem; italic?: boolean }) {
   const negative = item.monto < 0;
   return (
-    <div className={`flex items-center justify-between px-5 py-2 hover:bg-surface-soft/40 transition-colors ${italic ? 'italic' : ''}`}>
+    <div className={`flex items-center justify-between px-5 py-2 ${italic ? 'italic' : ''}`}>
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="font-mono text-[10px] text-text-subtle w-14 shrink-0">{item.codigo}</span>
         <span className="text-sm text-text-main truncate">
@@ -160,30 +161,28 @@ function Row({ item, italic }: { item: LineItem; italic?: boolean }) {
   );
 }
 
+// Totales en tinta neutra (un balance no usa colores semánticos en sus sumas);
+// el total final lleva el doble subrayado contable en lugar de fondo de color.
 function TotalRow({
   label,
   value,
-  tone,
   highlight,
 }: {
   label: string;
   value: number;
-  tone: 'primary' | 'warning' | 'info';
+  tone?: 'primary' | 'warning' | 'info';
   highlight?: boolean;
 }) {
-  const toneColors = {
-    primary: 'text-primary-700 dark:text-primary-300',
-    warning: 'text-warning',
-    info: 'text-info',
-  };
   return (
     <div
       className={`flex items-center justify-between px-5 py-3 border-t border-border-soft ${
-        highlight ? 'bg-primary-50 dark:bg-primary-100/10 border-t-2 border-primary-500/40' : 'bg-surface-soft'
+        highlight ? '' : 'bg-surface-soft'
       }`}
     >
-      <span className={`text-xs uppercase tracking-wider font-bold ${toneColors[tone]}`}>{label}</span>
-      <span className={`text-base font-bold tabular-nums ${toneColors[tone]}`}>{formatCurrency(value)}</span>
+      <span className="text-xs uppercase tracking-wider font-bold text-text-main">{label}</span>
+      <span className={`text-base font-bold tabular-nums text-text-main ${highlight ? 'total-final' : ''}`}>
+        {formatCurrency(value)}
+      </span>
     </div>
   );
 }

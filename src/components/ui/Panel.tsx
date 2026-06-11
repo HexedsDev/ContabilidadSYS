@@ -15,15 +15,15 @@ interface PanelProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Brand color is preserved across light/dark modes using fixed hex values
- * (instead of CSS vars that swap), so the panel always feels like brand.
+ * Tonos tinta profundos con hex fijos (no CSS vars que cambian con el tema):
+ * el dato en blanco se lee bien y el bloque no "grita" como un banner.
  */
 const toneClasses: Record<PanelTone, string> = {
-  primary: 'bg-[#2942e6] text-white border border-[#1f33b4] dark:bg-[#3b5fff] dark:border-[#5b7dff]',
-  success: 'bg-[#16a34a] text-white border border-[#15803d] dark:bg-[#22c55e] dark:border-[#16a34a]',
-  warning: 'bg-[#d97706] text-white border border-[#b45309] dark:bg-[#f59e0b] dark:border-[#d97706]',
-  error: 'bg-[#dc2626] text-white border border-[#b91c1c] dark:bg-[#ef4444] dark:border-[#dc2626]',
-  info: 'bg-[#2563eb] text-white border border-[#1d4ed8] dark:bg-[#3b82f6] dark:border-[#2563eb]',
+  primary: 'bg-[#1d2d50] text-white border border-[#2a3c66] dark:bg-[#1f2c4e] dark:border-[#33415e]',
+  success: 'bg-[#14532d] text-white border border-[#1c7240] dark:bg-[#15482a] dark:border-[#236b41]',
+  warning: 'bg-[#92400e] text-white border border-[#b45309] dark:bg-[#7c3a0d] dark:border-[#a14e16]',
+  error: 'bg-[#7f1d1d] text-white border border-[#9b2c2c] dark:bg-[#6b1a1a] dark:border-[#8c2727]',
+  info: 'bg-[#1e3a5f] text-white border border-[#2c5079] dark:bg-[#1a3354] dark:border-[#2c5079]',
   dark: 'bg-slate-900 text-white border border-slate-800 dark:bg-slate-950 dark:border-slate-700',
 };
 

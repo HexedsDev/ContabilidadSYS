@@ -365,7 +365,7 @@ function DepTable({
           </thead>
           <tbody className="divide-y divide-border-soft">
             {rows.map(r => (
-              <tr key={r.cuentaActivo} className="hover:bg-surface-soft/40 transition-colors">
+              <tr key={r.cuentaActivo}>
                 <td className="px-4 py-2">
                   <span className="font-mono text-[10px] text-text-subtle mr-2">{r.cuentaActivo}</span>
                   <span className="text-text-main">{r.nombre}</span>

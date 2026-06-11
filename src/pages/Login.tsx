@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookText, FileBarChart2, ShieldCheck, UserRound } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { ParticleTextEffect } from '../components/ui/particle-text-effect';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
@@ -54,15 +52,7 @@ export function Login() {
   };
 
   return (
-    <div className="dark relative min-h-screen overflow-hidden bg-[#040712] text-white">
-      <div className="absolute inset-0 opacity-35">
-        <ParticleTextEffect
-          words={['ACCESO', 'ROL', 'BACKEND']}
-          className="absolute inset-0 h-full w-full !rounded-none !border-0 !bg-transparent"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#040712] via-[#040712]/92 to-[#0a1226] pointer-events-none" />
-      </div>
-
+    <div className="dark relative min-h-screen overflow-hidden bg-[#0d1014] text-white">
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="px-4 py-5 sm:px-6 lg:px-8">
           <button
@@ -106,36 +96,24 @@ export function Login() {
                     text: 'Auditoria y revision',
                   },
                 ].map(item => (
-                  <motion.div
-                    key={item.title}
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.45, ease: 'easeOut' }}
-                  >
-                    <Card className="border-white/10 bg-white/5 text-white backdrop-blur">
-                      <CardContent className="pt-5">
-                        <item.icon className="h-4.5 w-4.5 text-emerald-300" />
-                        <p className="mt-4 text-sm font-semibold">{item.title}</p>
-                        <p className="mt-1 text-sm text-white/58">{item.text}</p>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                  <Card key={item.title} className="border-white/10 bg-white/[0.04] text-white">
+                    <CardContent className="pt-5">
+                      <item.icon className="h-4.5 w-4.5 text-primary-300" />
+                      <p className="mt-4 text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-sm text-white/58">{item.text}</p>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
 
-              <div className="mt-6 overflow-hidden rounded-sm border border-white/10 bg-white/5">
-                <motion.div
-                  className="h-1 bg-gradient-to-r from-emerald-300 via-sky-300 to-primary-400"
-                  animate={{ x: ['-35%', '105%'] }}
-                  transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-                />
+              <div className="mt-6 overflow-hidden rounded-sm border border-white/10 bg-white/[0.04]">
                 <div className="px-4 py-3 text-sm text-white/62">
                   Un espacio de trabajo pensado para llevar el registro al dia y revisar la informacion con mas calma.
                 </div>
               </div>
             </section>
 
-            <section className="mx-auto w-full max-w-md rounded-sm border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur-xl sm:p-6">
+            <section className="mx-auto w-full max-w-md rounded-sm border border-white/10 bg-[#13161c] p-6 shadow-lg">
               <div className="mb-6 flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-sm bg-white/10">
                   <UserRound className="h-5 w-5 text-white" />
