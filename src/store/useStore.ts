@@ -218,8 +218,18 @@ export const useStore = create<AppState>()(
         const { entries } = get();
         const numero = entries.length > 0 ? Math.max(...entries.map(e => e.numero)) + 1 : 1;
         const now = new Date().toISOString();
+        // Invariante del sistema: una partida descuadrada NUNCA entra como
+        // 'contabilizada' (corrompería Mayor, Balance de Saldos y estados
+        // financieros). Se degrada a borrador para corregirla en el Diario.
+        const totalDebe = entryData.lineas.reduce((s, l) => s + (l.debe || 0), 0);
+        const totalHaber = entryData.lineas.reduce((s, l) => s + (l.haber || 0), 0);
+        const estado =
+          entryData.estado === 'contabilizada' && Math.abs(totalDebe - totalHaber) > 0.01
+            ? 'borrador'
+            : entryData.estado;
         const newEntry: JournalEntry = {
           ...entryData,
+          estado,
           id: generateId(),
           numero,
           creada_en: now,

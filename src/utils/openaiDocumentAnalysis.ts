@@ -84,12 +84,15 @@ const SYSTEM_PROMPT = [
   'DEVOLUCIÓN SOBRE VENTAS (un cliente nos devuelve mercadería): DEBE 5.1.04 Devoluciones y Rebajas sobre Ventas (base) + DEBE 2.1.05 IVA por Pagar (IVA, se reversa el débito fiscal); HABER 1.1.01 Caja o 1.1.05 Clientes por el total devuelto. NUNCA cargues 4.1.01 Ventas.',
   'DEVOLUCIÓN SOBRE COMPRAS (nosotros devolvemos al proveedor): DEBE 1.1.01 Caja o 2.1.01 Proveedores por el total; HABER 4.1.03 Devoluciones y Rebajas sobre Compras (base) + HABER 1.1.10 IVA por Cobrar (IVA, se reversa el crédito fiscal). NUNCA abones 5.1.01 Compras. Ejemplo: devolución de Q4,400.00 → Caja debe 4,400.00; 4.1.03 haber 3,928.57; 1.1.10 haber 471.43.',
   'PLANILLA DE SUELDOS: los sueldos van al DEBE en 5.2.01 Sueldos y Salarios (o separados en 5.2.02 Sueldos Administración y 5.2.03 Sueldos Sala de Ventas si el documento los distingue) y 5.2.04 Bonificación Incentivo si aplica.',
+  '- BONIFICACIÓN INCENTIVO DE LEY (Decreto 37-2001): Q250.00 mensuales POR TRABAJADOR. Si el enunciado indica cuántos trabajadores hay (p.ej. "1 trabajador por departamento" con administración y ventas = 2 trabajadores → Q500.00), INCLÚYELA al DEBE en 5.2.04 Bonificación Incentivo aunque el enunciado no la mencione. No está afecta a IGSS, pero sí se paga en efectivo.',
   '- La cuota PATRONAL IGSS (12.67% del sueldo ordinario, SIN incluir bonificación incentivo) SÍ es gasto: DEBE 5.2.05 Cuota Patronal IGSS y HABER 2.1.09 IGSS por pagar patronal por el mismo monto.',
   '- La cuota LABORAL IGSS (4.83% del sueldo ordinario) NO es gasto de la empresa: se RETIENE al trabajador. Va únicamente al HABER en 2.1.07 IGSS por pagar laboral y reduce el efectivo pagado. PROHIBIDO registrar la cuota laboral como gasto: jamás va en una cuenta 5.x.',
   '- El efectivo pagado de la planilla (HABER 1.1.01 Caja o 1.1.03 Bancos) = sueldos + bonificación - cuota laboral retenida.',
   'COMPRA DE ACTIVOS FIJOS (mobiliario, computadoras, vehículos, maquinaria, edificios) → DEBE la cuenta 1.2.x por la base (1.2.04 Mobiliario y Equipo, 1.2.05 Equipo de Computación, 1.2.06 Vehículos, 1.2.07 Maquinaria, 1.2.03 Edificios) + DEBE 1.1.10 IVA por Cobrar por el IVA. Un activo fijo NUNCA va a 5.1.01 Compras ni a cuentas de gasto.',
   'PAGOS PARCIALES O MIXTOS: si el documento indica parte al contado y parte al crédito, divide la contrapartida: en compras, HABER 1.1.01 Caja por el contado y HABER 2.1.01 Proveedores (o 2.1.04 Documentos por Pagar a Corto Plazo si se firmaron documentos) por el saldo; en ventas, DEBE 1.1.01 Caja y DEBE 1.1.05 Clientes o 1.1.07. El IVA se calcula sobre el TOTAL de la factura, no solo sobre la parte pagada.',
   'CUADRE OBLIGATORIO: la suma del Debe debe ser EXACTAMENTE igual a la suma del Haber, al centavo. Antes de responder, suma ambas columnas; si hay diferencia de Q0.01 por redondeo, ajústala en la línea del IVA.',
+  'VERIFICA CADA PARTIDA POR SEPARADO antes de responder: suma su Debe y su Haber; si no coinciden al centavo, recalcula ESA partida desde el documento. Una sola partida descuadrada invalida toda la respuesta.',
+  'Los EJEMPLOS adjuntos son SOLO de formato y método: está PROHIBIDO copiar sus montos, fechas o totales a tu respuesta. Cada cifra debe derivarse EXCLUSIVAMENTE del documento o enunciado del usuario.',
   'Cada línea lleva monto solo en "debe" o solo en "haber" (el otro campo en 0). Nunca uses montos negativos ni repitas la misma cuenta en dos líneas: consolida los montos en una sola línea por cuenta.',
   'Si el documento muestra fecha, devuélvela en formato YYYY-MM-DD. Si solo muestra día y mes, complétala con el año del período fiscal indicado por el usuario. Si no hay fecha clara, deja "fecha" como cadena vacía; nunca inventes una fecha.',
   'Mantén "concepto" corto y útil para el libro diario (ej. "Compra de mercaderías al crédito"); en "observaciones" resume el documento: proveedor o cliente, número de factura y forma de pago.',
@@ -531,8 +534,10 @@ export async function analyzeExerciseWithOpenAI(params: {
   accounts: Account[];
   empresa: Empresa;
   model?: string;
+  /** Errores de un intento anterior (descuadres, cuentas inválidas) para que el modelo los corrija. */
+  feedback?: string;
 }): Promise<AIExerciseResult> {
-  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL } = params;
+  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL, feedback } = params;
   if (!apiKey.trim()) throw new Error('Falta la API key de OpenAI');
   if (!file && !text?.trim()) {
     throw new Error('Debes subir el enunciado o escribir el ejercicio completo');
@@ -548,6 +553,7 @@ export async function analyzeExerciseWithOpenAI(params: {
     '',
     'Resuelve el SIGUIENTE EJERCICIO CONTABLE COMPLETO. Genera la partida de apertura con los saldos iniciales (calcula el capital como activos − pasivos) y luego UNA partida por cada operación, todas cuadradas, siguiendo el método.',
     'Devuelve el arreglo "partidas" en orden cronológico, la apertura primero, con códigos y nombres exactos del catálogo.',
+    ...(feedback ? ['', 'CORRECCIÓN SOLICITADA — un intento anterior tuvo estos errores; corrígelos todos:', feedback] : []),
   ].join('\n');
 
   const content = await buildUserContent({ prompt, file, text, textLabel: 'Enunciado del ejercicio:' });

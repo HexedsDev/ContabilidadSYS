@@ -306,26 +306,62 @@ export function RegistrarPartida() {
     setAnalysisSource(input.file ? input.file.name : 'Ejercicio completo (texto)');
     setAnalysisNote('Resolviendo el ejercicio completo: apertura + todas las operaciones...');
     try {
-      const result = await analyzeExerciseWithOpenAI({
-        file: input.file,
-        text: input.file ? undefined : input.text,
-        apiKey: aiSettings.apiKey,
-        accounts,
-        empresa,
-        model: OPENAI_DEFAULT_MODEL,
-      });
-      const partidas = result.partidas.map(prepararPartidaEjercicio).filter(p => p.lineas.length > 0);
-      if (partidas.length === 0) throw new Error('No se pudieron interpretar partidas del ejercicio');
-      setExercise({ capitalInicial: result.capitalInicial, resumen: result.resumen, partidas });
+      const intentar = async (feedback?: string) => {
+        const result = await analyzeExerciseWithOpenAI({
+          file: input.file,
+          text: input.file ? undefined : input.text,
+          apiKey: aiSettings.apiKey,
+          accounts,
+          empresa,
+          model: OPENAI_DEFAULT_MODEL,
+          feedback,
+        });
+        const partidas = result.partidas.map(prepararPartidaEjercicio).filter(p => p.lineas.length > 0);
+        return { result, partidas, problemas: partidas.filter(p => !p.cuadrada || p.faltantes.length > 0) };
+      };
+
+      let intento = await intentar();
+      if (intento.partidas.length === 0) throw new Error('No se pudieron interpretar partidas del ejercicio');
+
+      // Auto-corrección: si alguna partida quedó descuadrada o con cuentas sin
+      // resolver, se reintenta UNA vez describiéndole a la IA el error exacto,
+      // y se conserva el mejor de los dos resultados.
+      if (intento.problemas.length > 0) {
+        setAnalysisNote('Algunas partidas no cuadraron; pidiendo a la IA que las corrija...');
+        const detalle = intento.problemas
+          .map(
+            p =>
+              `- "${p.concepto}" (${p.fecha}): Debe ${p.totalDebe.toFixed(2)} vs Haber ${p.totalHaber.toFixed(2)}${
+                p.faltantes.length > 0 ? `; cuentas no reconocidas: ${p.faltantes.join(', ')}` : ''
+              }`
+          )
+          .join('\n');
+        try {
+          const reintento = await intentar(
+            `Estas partidas quedaron DESCUADRADAS o con cuentas inválidas:\n${detalle}\nVuelve a resolver TODO el ejercicio. Cada partida debe cuadrar al centavo, usando únicamente montos derivados del enunciado (jamás de los ejemplos). Recuerda la bonificación incentivo de ley (Q250.00 por trabajador) cuando el enunciado indique cuántos trabajadores hay.`
+          );
+          if (reintento.partidas.length > 0 && reintento.problemas.length < intento.problemas.length) {
+            intento = reintento;
+          }
+        } catch {
+          // Si el reintento falla, se conserva el primer resultado.
+        }
+      }
+
+      const partidas = intento.partidas;
+      setExercise({ capitalInicial: intento.result.capitalInicial, resumen: intento.result.resumen, partidas });
       setLimpiarPrimero(entries.length > 0);
-      const conProblemas = partidas.filter(p => !p.cuadrada || p.faltantes.length > 0).length;
+      const conProblemas = intento.problemas.length;
       setAnalysisNote(
         `Ejercicio resuelto: ${partidas.length} partidas generadas${conProblemas > 0 ? `, ${conProblemas} requieren revisión` : ''}. Revísalas abajo y guarda o contabiliza.`
       );
       if (conProblemas > 0) {
-        toast.warning('Ejercicio resuelto con avisos', `${conProblemas} partida(s) requieren revisión`);
+        toast.warning(
+          'Ejercicio resuelto con avisos',
+          `${conProblemas} partida(s) requieren revisión; al contabilizar quedarán como borrador para corregirlas`
+        );
       } else {
-        toast.success('Ejercicio resuelto', `${partidas.length} partidas generadas`);
+        toast.success('Ejercicio resuelto', `${partidas.length} partidas generadas, todas cuadradas`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo resolver el ejercicio';
@@ -346,12 +382,21 @@ export function RegistrarPartida() {
     if (!exercise) return;
     if (estado === 'contabilizada' && limpiarPrimero) clearData();
     const ordenadas = [...exercise.partidas].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+    let contabilizadas = 0;
+    let comoBorrador = 0;
     for (const p of ordenadas) {
+      // Garantía del sistema: una partida descuadrada o con cuentas faltantes
+      // JAMÁS se contabiliza (corrompería Mayor, Balance y estados); entra
+      // como borrador para corregirla a mano en el Libro Diario.
+      const esSegura = p.cuadrada && p.faltantes.length === 0;
+      const estadoFinal = estado === 'contabilizada' && esSegura ? 'contabilizada' : 'borrador';
+      if (estadoFinal === 'contabilizada') contabilizadas++;
+      else comoBorrador++;
       addEntry({
         fecha: p.fecha || empresa.periodo_inicio,
         concepto: p.concepto || 'Partida del ejercicio',
         observaciones: [p.observaciones, '[ejercicio-IA]'].filter(Boolean).join(' '),
-        estado,
+        estado: estadoFinal,
         lineas: p.lineas.map(l => ({
           id: generateId(),
           cuenta_codigo: l.cuenta_codigo,
@@ -363,7 +408,14 @@ export function RegistrarPartida() {
     setConfirmExercise(false);
     setExercise(null);
     if (estado === 'contabilizada') {
-      toast.success('Ejercicio contabilizado', `${ordenadas.length} partidas en el Libro Diario`);
+      if (comoBorrador > 0) {
+        toast.warning(
+          'Ejercicio registrado con pendientes',
+          `${contabilizadas} partida(s) contabilizadas; ${comoBorrador} quedaron como borrador por descuadre o cuentas faltantes — corrígelas en el Libro Diario`
+        );
+      } else {
+        toast.success('Ejercicio contabilizado', `${contabilizadas} partidas en el Libro Diario`);
+      }
       navigate('/app/diario');
     } else {
       toast.success('Cambios guardados', `${ordenadas.length} partidas guardadas como borrador en el Libro Diario`);
