@@ -1,11 +1,14 @@
 import type { Account, Empresa } from '../types';
 
 export const OPENAI_DEFAULT_MODEL = 'gpt-4o';
-// Por defecto se llama directamente a la API de OpenAI (funciona desde el navegador
-// con la API key del usuario). Si tienes un proxy backend propio, configura
-// VITE_OPENAI_API_URL para apuntar a él y ocultar la clave.
+// IMPORTANTE: el navegador NO puede llamar a api.openai.com directamente — OpenAI
+// no envía cabeceras CORS, así que la petición falla con "Failed to fetch". Por eso
+// en desarrollo se usa el proxy de Vite ('/api/openai' → api.openai.com, definido en
+// vite.config.ts), que reenvía la solicitud desde el servidor (sin CORS).
+// En producción (build estático), configura VITE_OPENAI_API_URL con la URL de tu
+// proxy o función serverless; o añade una reescritura equivalente en el host.
 export const OPENAI_API_URL =
-  (import.meta.env.VITE_OPENAI_API_URL as string | undefined)?.trim() || 'https://api.openai.com/v1/responses';
+  (import.meta.env.VITE_OPENAI_API_URL as string | undefined)?.trim() || '/api/openai/v1/responses';
 export const OPENAI_TIMEOUT_MS = 90_000;
 export const MAX_ANALYSIS_FILE_BYTES = 10 * 1024 * 1024;
 
