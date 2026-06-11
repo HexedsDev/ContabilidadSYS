@@ -6,7 +6,6 @@ import { AdminUsuarios } from './pages/AdminUsuarios';
 import { Layout } from './layouts/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { RegistrarPartida } from './pages/RegistrarPartida';
-import { ResolverEjercicio } from './pages/ResolverEjercicio';
 import { LibroDiario } from './pages/LibroDiario';
 import { LibroMayor } from './pages/LibroMayor';
 import { BalanceSaldos } from './pages/BalanceSaldos';
@@ -90,7 +89,6 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="apertura" element={<PartidaApertura />} />
               <Route path="registrar" element={<RegistrarPartida />} />
-              <Route path="ejercicio" element={<ResolverEjercicio />} />
               <Route path="diario" element={<LibroDiario />} />
               <Route path="mayor" element={<LibroMayor />} />
               <Route path="balance" element={<BalanceSaldos />} />

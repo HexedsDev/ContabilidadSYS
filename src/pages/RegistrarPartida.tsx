@@ -22,6 +22,7 @@ import {
   FileText,
   Loader2,
   Upload,
+  ListChecks,
 } from 'lucide-react';
 import { SearchableSelect } from '../components/SearchableSelect';
 import type { EntryLine } from '../types';
@@ -30,11 +31,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
   analyzeDocumentWithOpenAI,
+  analyzeExerciseWithOpenAI,
   MAX_ANALYSIS_FILE_BYTES,
   OPENAI_DEFAULT_MODEL,
   type AIAnalysisDraft,
   type AIAnalysisLine,
+  type AIExercisePartida,
 } from '../utils/openaiDocumentAnalysis';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 type Line = Omit<EntryLine, 'id'>;
 
@@ -52,6 +56,17 @@ const looksLikeFullExercise = (text: string): boolean => {
   return operacionesFechadas.length >= 2 || (pideTodo && operacionesFechadas.length >= 1);
 };
 
+interface ExercisePartidaPrep {
+  fecha: string;
+  concepto: string;
+  observaciones: string;
+  lineas: { cuenta_codigo: string; cuenta_nombre: string; debe: number; haber: number }[];
+  totalDebe: number;
+  totalHaber: number;
+  cuadrada: boolean;
+  faltantes: string[];
+}
+
 export function RegistrarPartida() {
   const accounts = useStore(s => s.accounts);
   const entries = useStore(s => s.entries);
@@ -59,6 +74,7 @@ export function RegistrarPartida() {
   const aiSettings = useStore(s => s.aiSettings);
   const addEntry = useStore(s => s.addEntry);
   const updateEntry = useStore(s => s.updateEntry);
+  const clearData = useStore(s => s.clearData);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -84,11 +100,26 @@ export function RegistrarPartida() {
   const [analysisSource, setAnalysisSource] = useState<string | null>(null);
   const [analysisNote, setAnalysisNote] = useState<string | null>(null);
   const [analysisText, setAnalysisText] = useState('');
+  // Ejercicio completo resuelto por la IA: apertura + todas las operaciones,
+  // listo para guardarse como borradores o contabilizarse de una vez.
+  const [exercise, setExercise] = useState<{
+    capitalInicial: number;
+    resumen: string;
+    partidas: ExercisePartidaPrep[];
+  } | null>(null);
+  const [limpiarPrimero, setLimpiarPrimero] = useState(true);
+  const [confirmExercise, setConfirmExercise] = useState(false);
+  const exerciseFileRef = useRef<HTMLInputElement>(null);
 
   const detalleAccounts = useMemo(
     () => accounts.filter(a => a.permite_movimientos || a.tipo === 'Detalle'),
     [accounts]
   );
+
+  const accName = useMemo(() => {
+    const m = new Map(accounts.map(a => [a.codigo, a.nombre]));
+    return (c: string) => m.get(c) ?? c;
+  }, [accounts]);
 
   const accountOptions = useMemo(
     () =>
@@ -219,6 +250,126 @@ export function RegistrarPartida() {
     return { lines: resolved, warnings };
   };
 
+  const prepararPartidaEjercicio = (p: AIExercisePartida): ExercisePartidaPrep => {
+    const faltantes: string[] = [];
+    // Consolida por cuenta (neto debe−haber) para no repetir cuentas.
+    const porCuenta = new Map<string, number>();
+    for (const line of p.lineas) {
+      const debe = Number(line.debe) || 0;
+      const haber = Number(line.haber) || 0;
+      if (debe === 0 && haber === 0) continue;
+      const codigo = resolveDocumentAccount(line);
+      if (!codigo) {
+        faltantes.push(line.cuenta_nombre || line.cuenta_codigo || 'cuenta sin nombre');
+        continue;
+      }
+      porCuenta.set(codigo, (porCuenta.get(codigo) ?? 0) + debe - haber);
+    }
+    const lineasPrep = [...porCuenta.entries()]
+      .filter(([, neto]) => Math.abs(neto) >= 0.005)
+      .map(([codigo, neto]) => ({
+        cuenta_codigo: codigo,
+        cuenta_nombre: accName(codigo),
+        debe: neto > 0 ? Number(neto.toFixed(2)) : 0,
+        haber: neto < 0 ? Number(Math.abs(neto).toFixed(2)) : 0,
+      }));
+    const totalDebe = Number(lineasPrep.reduce((s, l) => s + l.debe, 0).toFixed(2));
+    const totalHaber = Number(lineasPrep.reduce((s, l) => s + l.haber, 0).toFixed(2));
+    return {
+      fecha: p.fecha,
+      concepto: p.concepto,
+      observaciones: p.observaciones,
+      lineas: lineasPrep,
+      totalDebe,
+      totalHaber,
+      cuadrada: Math.abs(totalDebe - totalHaber) < 0.01 && lineasPrep.length >= 2,
+      faltantes,
+    };
+  };
+
+  // Resuelve un EJERCICIO COMPLETO sin salir de esta pantalla: la IA genera la
+  // apertura (con el capital calculado) y una partida por cada operación.
+  const runExercise = async (input: { file?: File; text?: string }) => {
+    if (!aiEnabled) return;
+    if (!input.file && !input.text?.trim()) {
+      toast.warning('Sin enunciado', 'Pega el ejercicio o sube el archivo del enunciado');
+      return;
+    }
+    if (input.file && input.file.size > MAX_ANALYSIS_FILE_BYTES) {
+      toast.error('Archivo demasiado grande', `Maximo ${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB`);
+      if (exerciseFileRef.current) exerciseFileRef.current.value = '';
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setExercise(null);
+    setAnalysisSource(input.file ? input.file.name : 'Ejercicio completo (texto)');
+    setAnalysisNote('Resolviendo el ejercicio completo: apertura + todas las operaciones...');
+    try {
+      const result = await analyzeExerciseWithOpenAI({
+        file: input.file,
+        text: input.file ? undefined : input.text,
+        apiKey: aiSettings.apiKey,
+        accounts,
+        empresa,
+        model: OPENAI_DEFAULT_MODEL,
+      });
+      const partidas = result.partidas.map(prepararPartidaEjercicio).filter(p => p.lineas.length > 0);
+      if (partidas.length === 0) throw new Error('No se pudieron interpretar partidas del ejercicio');
+      setExercise({ capitalInicial: result.capitalInicial, resumen: result.resumen, partidas });
+      setLimpiarPrimero(entries.length > 0);
+      const conProblemas = partidas.filter(p => !p.cuadrada || p.faltantes.length > 0).length;
+      setAnalysisNote(
+        `Ejercicio resuelto: ${partidas.length} partidas generadas${conProblemas > 0 ? `, ${conProblemas} requieren revisión` : ''}. Revísalas abajo y guarda o contabiliza.`
+      );
+      if (conProblemas > 0) {
+        toast.warning('Ejercicio resuelto con avisos', `${conProblemas} partida(s) requieren revisión`);
+      } else {
+        toast.success('Ejercicio resuelto', `${partidas.length} partidas generadas`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo resolver el ejercicio';
+      setAnalysisNote(message);
+      toast.error('Error al resolver el ejercicio', message);
+    } finally {
+      setAnalysisLoading(false);
+      if (exerciseFileRef.current) exerciseFileRef.current.value = '';
+    }
+  };
+
+  const handleExerciseFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void runExercise({ file });
+  };
+
+  const guardarEjercicio = (estado: 'borrador' | 'contabilizada') => {
+    if (!exercise) return;
+    if (estado === 'contabilizada' && limpiarPrimero) clearData();
+    const ordenadas = [...exercise.partidas].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
+    for (const p of ordenadas) {
+      addEntry({
+        fecha: p.fecha || empresa.periodo_inicio,
+        concepto: p.concepto || 'Partida del ejercicio',
+        observaciones: [p.observaciones, '[ejercicio-IA]'].filter(Boolean).join(' '),
+        estado,
+        lineas: p.lineas.map(l => ({
+          id: generateId(),
+          cuenta_codigo: l.cuenta_codigo,
+          debe: l.debe,
+          haber: l.haber,
+        })),
+      });
+    }
+    setConfirmExercise(false);
+    setExercise(null);
+    if (estado === 'contabilizada') {
+      toast.success('Ejercicio contabilizado', `${ordenadas.length} partidas en el Libro Diario`);
+      navigate('/app/diario');
+    } else {
+      toast.success('Cambios guardados', `${ordenadas.length} partidas guardadas como borrador en el Libro Diario`);
+    }
+  };
+
   const handleAnalyzeDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -234,6 +385,7 @@ export function RegistrarPartida() {
     }
 
     setAnalysisLoading(true);
+    setExercise(null);
     setAnalysisSource(file.name);
     setAnalysisNote(null);
 
@@ -293,15 +445,15 @@ export function RegistrarPartida() {
     }
     if (!aiEnabled) return;
 
-    // Un ejercicio completo no cabe en una sola partida: se envía a la página
-    // Resolver Ejercicio (IA), que genera la apertura y todas las operaciones.
+    // Un ejercicio completo no cabe en una sola partida: se resuelve aquí
+    // mismo, generando la apertura y todas las operaciones.
     if (looksLikeFullExercise(analysisText)) {
-      toast.success('Ejercicio completo detectado', 'Abriendo Resolver Ejercicio (IA) para generar todas las partidas...');
-      navigate('/app/ejercicio', { state: { texto: analysisText, autorun: true } });
+      await runExercise({ text: analysisText });
       return;
     }
 
     setAnalysisLoading(true);
+    setExercise(null);
     setAnalysisSource('Texto escrito por el usuario');
     setAnalysisNote(null);
 
@@ -498,6 +650,13 @@ export function RegistrarPartida() {
               onChange={handleAnalyzeDocument}
               className="hidden"
             />
+            <input
+              ref={exerciseFileRef}
+              type="file"
+              accept="application/pdf,image/*,.txt,.md,.csv,.html"
+              onChange={handleExerciseFile}
+              className="hidden"
+            />
 
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -522,14 +681,18 @@ export function RegistrarPartida() {
                 hint="Esta opción solo aparece cuando el asistente IA está activo."
               />
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => navigate('/app/ejercicio', { state: { texto: analysisText } })}
-                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 dark:text-primary-300 hover:underline ring-focus rounded-xs"
+                <Button
+                  variant="outline"
+                  title="Pega el enunciado en el cuadro o súbelo en foto/PDF: genera la apertura y TODAS las partidas"
+                  leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  onClick={() => {
+                    if (analysisText.trim()) void runExercise({ text: analysisText });
+                    else exerciseFileRef.current?.click();
+                  }}
+                  disabled={analysisLoading}
                 >
-                  <Wand2 className="w-3.5 h-3.5" />
-                  ¿Ejercicio completo (saldos + varias operaciones)? Resuélvelo todo de una vez
-                </button>
+                  Resolver ejercicio completo
+                </Button>
                 <Button
                   leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   onClick={handleAnalyzeText}
@@ -550,6 +713,97 @@ export function RegistrarPartida() {
               </div>
             )}
           </CardContent>
+        </Card>
+      )}
+
+      {/* Ejercicio completo resuelto: revisar, guardar como borradores o contabilizar todo */}
+      {aiEnabled && exercise && (
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3 border-b border-border-soft flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <Wand2 className="w-4 h-4 text-primary-600" />
+              <h2 className="text-sm font-semibold text-text-main">Ejercicio resuelto</h2>
+              <Badge variant="primary" size="sm">
+                Capital inicial: {formatCurrency(exercise.capitalInicial)}
+              </Badge>
+            </div>
+            <span className="text-xs text-text-muted">{exercise.partidas.length} partida(s) generadas</span>
+          </div>
+          <CardContent className="p-0 divide-y divide-border-soft">
+            {exercise.partidas.map((p, i) => (
+              <div key={i} className="p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <p className="text-sm font-semibold text-text-main truncate">
+                    <span className="font-mono text-xs text-text-muted mr-2">{p.fecha || '—'}</span>
+                    {p.concepto}
+                  </p>
+                  {p.cuadrada && p.faltantes.length === 0 ? (
+                    <Badge variant="success" size="sm" dot>
+                      Cuadrada
+                    </Badge>
+                  ) : (
+                    <Badge variant="error" size="sm" dot>
+                      Revisar
+                    </Badge>
+                  )}
+                </div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    {p.lineas.map((l, j) => (
+                      <tr key={j} className="border-b border-border-soft/40 last:border-0">
+                        <td className="py-1.5 font-mono text-[10px] text-text-subtle w-16">{l.cuenta_codigo}</td>
+                        <td className={`py-1.5 text-text-main ${l.haber > 0 ? 'pl-8' : ''}`}>
+                          {l.haber > 0 ? `a ${l.cuenta_nombre}` : l.cuenta_nombre}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums w-28 text-text-muted">
+                          {l.debe > 0 ? formatCurrency(l.debe) : ''}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums w-28 text-text-muted">
+                          {l.haber > 0 ? formatCurrency(l.haber) : ''}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="font-bold text-text-main">
+                      <td colSpan={2} className="py-1.5 text-right uppercase text-[10px] tracking-wider text-text-muted">
+                        Sumas
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums">{formatCurrency(p.totalDebe)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{formatCurrency(p.totalHaber)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {p.faltantes.length > 0 && (
+                  <p className="mt-1 text-xs text-error">
+                    No se reconocieron: {p.faltantes.join(', ')}. Agrégalas a mano antes de contabilizar.
+                  </p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+          <div className="px-5 py-3 border-t border-border-soft bg-surface-soft/50 flex items-center justify-between gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-xs text-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={limpiarPrimero}
+                onChange={e => setLimpiarPrimero(e.target.checked)}
+                className="h-4 w-4 rounded border-border-strong text-primary-600 focus:ring-primary-500"
+              />
+              Borrar las partidas actuales al contabilizar (ejercicio nuevo)
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Save className="w-4 h-4" />}
+                onClick={() => guardarEjercicio('borrador')}
+              >
+                Guardar cambios
+              </Button>
+              <Button size="sm" leftIcon={<ListChecks className="w-4 h-4" />} onClick={() => setConfirmExercise(true)}>
+                Contabilizar todas ({exercise.partidas.length})
+              </Button>
+            </div>
+          </div>
         </Card>
       )}
 
@@ -718,6 +972,18 @@ export function RegistrarPartida() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={confirmExercise}
+        onClose={() => setConfirmExercise(false)}
+        onConfirm={() => guardarEjercicio('contabilizada')}
+        title="¿Contabilizar todo el ejercicio?"
+        message={`${
+          limpiarPrimero ? 'Se borrarán las partidas actuales y ' : 'Se agregarán al Libro Diario '
+        }se contabilizarán ${exercise?.partidas.length ?? 0} partida(s). Luego podrás ver el Libro Mayor y el Balance de Saldos.`}
+        confirmText="Sí, contabilizar todo"
+        variant={limpiarPrimero ? 'danger' : 'primary'}
+      />
     </div>
   );
 }
