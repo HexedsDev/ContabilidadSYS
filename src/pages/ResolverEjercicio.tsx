@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -48,10 +48,13 @@ export function ResolverEjercicio() {
   const addEntry = useStore(s => s.addEntry);
   const clearData = useStore(s => s.clearData);
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [texto, setTexto] = useState('');
+  // Texto enviado desde Registrar Partida cuando detecta un ejercicio completo.
+  const incoming = location.state as { texto?: string; autorun?: boolean } | null;
+  const [texto, setTexto] = useState(incoming?.texto ?? '');
   const [loading, setLoading] = useState(false);
   const [fuente, setFuente] = useState<string | null>(null);
   const [capitalInicial, setCapitalInicial] = useState<number | null>(null);
@@ -177,6 +180,25 @@ export function ResolverEjercicio() {
     const file = e.target.files?.[0];
     if (file) void run(file);
   };
+
+  // Auto-ejecuta cuando Registrar Partida redirige aquí con un ejercicio
+  // detectado (autorun). El ref evita repetirlo y se limpia el state de
+  // navegación para que recargar la página no lo vuelva a disparar.
+  const autorunDone = useRef(false);
+  useEffect(() => {
+    if (autorunDone.current) return;
+    if (incoming?.autorun && incoming.texto?.trim() && aiEnabled) {
+      autorunDone.current = true;
+      navigate('/app/ejercicio', { replace: true });
+      // Acción de arranque única, diferida fuera del cuerpo del efecto. SIN
+      // cleanup a propósito: en StrictMode (dev) el ciclo montar→desmontar→
+      // remontar cancelaría el timer mientras el ref ya bloquea el reintento,
+      // y el autorun no se dispararía nunca. El ref garantiza una sola vez.
+      setTimeout(() => void run(), 0);
+    }
+    // Solo al montar: `incoming` proviene del state de navegación inicial.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const contabilizarTodas = () => {
     if (limpiarPrimero) clearData();

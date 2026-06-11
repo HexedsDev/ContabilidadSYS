@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Scale,
   Bot,
+  Wand2,
   FileText,
   Loader2,
   Upload,
@@ -36,6 +37,20 @@ import {
 } from '../utils/openaiDocumentAnalysis';
 
 type Line = Omit<EntryLine, 'id'>;
+
+// Heurística: un EJERCICIO COMPLETO trae varias operaciones fechadas ("Febrero 2:",
+// "Abril 10:") y/o pide diario/mayor/balance. Esta pantalla genera UNA partida;
+// si el texto parece un ejercicio, se envía a Resolver Ejercicio (IA) que genera
+// la apertura y todas las partidas de una vez.
+const looksLikeFullExercise = (text: string): boolean => {
+  const t = text.toLowerCase();
+  const operacionesFechadas =
+    t.match(/(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+\d{1,2}\s*:/g) ??
+    [];
+  const pideTodo =
+    /se\s+solicita|partidas?\s+de\s+diario|balance\s+de\s+saldos|capital\s+inicial|saldos\s+iniciales|inventario\s+inicial/.test(t);
+  return operacionesFechadas.length >= 2 || (pideTodo && operacionesFechadas.length >= 1);
+};
 
 export function RegistrarPartida() {
   const accounts = useStore(s => s.accounts);
@@ -278,6 +293,14 @@ export function RegistrarPartida() {
     }
     if (!aiEnabled) return;
 
+    // Un ejercicio completo no cabe en una sola partida: se envía a la página
+    // Resolver Ejercicio (IA), que genera la apertura y todas las operaciones.
+    if (looksLikeFullExercise(analysisText)) {
+      toast.success('Ejercicio completo detectado', 'Abriendo Resolver Ejercicio (IA) para generar todas las partidas...');
+      navigate('/app/ejercicio', { state: { texto: analysisText, autorun: true } });
+      return;
+    }
+
     setAnalysisLoading(true);
     setAnalysisSource('Texto escrito por el usuario');
     setAnalysisNote(null);
@@ -498,7 +521,15 @@ export function RegistrarPartida() {
                 placeholder="Pega aquí el contenido del documento si no quieres subir un archivo..."
                 hint="Esta opción solo aparece cuando el asistente IA está activo."
               />
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => navigate('/app/ejercicio', { state: { texto: analysisText } })}
+                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 dark:text-primary-300 hover:underline ring-focus rounded-xs"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  ¿Ejercicio completo (saldos + varias operaciones)? Resuélvelo todo de una vez
+                </button>
                 <Button
                   leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   onClick={handleAnalyzeText}
