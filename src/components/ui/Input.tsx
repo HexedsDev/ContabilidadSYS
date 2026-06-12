@@ -6,6 +6,7 @@ interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, '
   hint?: string;
   error?: string;
   leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
   rightAddon?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }
@@ -17,9 +18,10 @@ const sizeClasses = {
 };
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, hint, error, leftIcon, rightAddon, size = 'md', id, ...props }, ref) => {
+  ({ className, label, hint, error, leftIcon, rightIcon, rightAddon, size = 'md', id, ...props }, ref) => {
     const generatedId = React.useId();
     const inputId = id ?? generatedId;
+    const rightContent = rightAddon ?? rightIcon;
 
     return (
       <div className="w-full">
@@ -52,16 +54,16 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               'flex-1 bg-transparent outline-none placeholder:text-text-subtle text-text-main px-3 min-w-0',
               leftIcon && 'pl-2',
-              rightAddon && 'pr-2',
+              rightContent && 'pr-2',
               className
             )}
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
             {...props}
           />
-          {rightAddon && (
+          {rightContent && (
             <span className="pr-3 pl-1 text-text-subtle inline-flex items-center text-sm">
-              {rightAddon}
+              {rightContent}
             </span>
           )}
         </div>

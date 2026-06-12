@@ -7,25 +7,58 @@ type AuthResult = { success: boolean; message: string };
 
 const DEFAULT_SUPER_ADMIN: User = {
   id: 'auth-super-admin',
-  nombre: 'Super Admin',
-  email: 'admin@contabilidad.sys',
-  password: 'admin123',
+  nombre: 'Monky Adam',
+  email: 'monky.adam@contabilidad.sys',
+  password: 'monky2026',
   rol: 'super_admin',
   activo: true,
   creado_en: '2026-01-01T00:00:00.000Z',
 };
 
-const DEFAULT_TEST_USER: User = {
+const DEFAULT_DERIK_USER: User = {
   id: 'auth-demo-counter',
-  nombre: 'Contador Demo',
-  email: 'contador.demo@contabilidad.sys',
-  password: 'demo2026',
+  nombre: 'Monky Derik',
+  email: 'monky.derik@contabilidad.sys',
+  password: 'monky2026',
   rol: 'contador',
   activo: true,
   creado_en: '2026-01-02T00:00:00.000Z',
 };
 
-const seedUsers = (): User[] => [DEFAULT_SUPER_ADMIN, DEFAULT_TEST_USER];
+const DEFAULT_MARK_USER: User = {
+  id: 'auth-monky-mark',
+  nombre: 'Monky Mark',
+  email: 'monky.mark@contabilidad.sys',
+  password: 'monky2026',
+  rol: 'contador',
+  activo: true,
+  creado_en: '2026-01-03T00:00:00.000Z',
+};
+
+const DEFAULT_EMPERATRIZ_USER: User = {
+  id: 'auth-monky-emperatriz',
+  nombre: 'Monky Emperatriz',
+  email: 'monky.emperatriz@contabilidad.sys',
+  password: 'monky2026',
+  rol: 'contador',
+  activo: true,
+  creado_en: '2026-01-04T00:00:00.000Z',
+};
+
+const seedUsers = (): User[] => [
+  DEFAULT_SUPER_ADMIN,
+  DEFAULT_DERIK_USER,
+  DEFAULT_MARK_USER,
+  DEFAULT_EMPERATRIZ_USER,
+];
+
+const syncSeedUsers = (users: User[]): User[] => {
+  const seedsById = new Map(seedUsers().map(user => [user.id, user]));
+  return users.map(user => {
+    const seed = seedsById.get(user.id);
+    return seed ? { ...seed, activo: user.activo } : user;
+  });
+};
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -210,10 +243,11 @@ export const useAuthStore = create<AuthState>()(
         // Seeds eliminados por un admin no vuelven a sembrarse (tombstones).
         const removedSeedIds = state.removedSeedIds ?? [];
         const removed = new Set(removedSeedIds);
+        const persistedUsers = syncSeedUsers(state.users ?? []);
         const seededUsers = seedUsers().filter(user => !removed.has(user.id));
-        // Persisted users come FIRST so their data (e.g. changed passwords) takes precedence.
+        // Persisted users come FIRST so active/deleted state is respected.
         // Seeded users are added only when no persisted user shares the same id/email.
-        const users = [...(state.users ?? []), ...seededUsers].reduce<User[]>((acc, user) => {
+        const users = [...persistedUsers, ...seededUsers].reduce<User[]>((acc, user) => {
           const exists = acc.some(item => item.id === user.id || item.email === user.email);
           if (!exists) acc.push(user);
           return acc;

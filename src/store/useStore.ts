@@ -25,6 +25,62 @@ const DEFAULT_AI_SETTINGS: AiSettings = {
   apiKey: '',
 };
 
+const CAPITAL_ACCOUNT_CODE = '3.1.01';
+const MONEY_TOLERANCE = 0.01;
+
+const roundMoney = (value: number) => Number(value.toFixed(2));
+
+const repairAiOpeningEntry = (entry: JournalEntry): JournalEntry => {
+  const isAiOpening =
+    /\[ejercicio-IA\]/i.test(entry.observaciones) &&
+    /apertura|saldos?\s+iniciales|inventario\s+inicial/i.test(`${entry.concepto} ${entry.observaciones}`);
+  if (!isAiOpening) return entry;
+
+  const totalDebe = roundMoney(entry.lineas.reduce((s, l) => s + (l.debe || 0), 0));
+  const totalHaber = roundMoney(entry.lineas.reduce((s, l) => s + (l.haber || 0), 0));
+  if (Math.abs(totalDebe - totalHaber) <= MONEY_TOLERANCE) return entry;
+
+  const lineas = entry.lineas.map(line => ({ ...line }));
+  const capitalIndex = lineas.findIndex(line => line.cuenta_codigo === CAPITAL_ACCOUNT_CODE);
+  const totalDebeSinCapital = roundMoney(
+    lineas.reduce((s, line) => (line.cuenta_codigo === CAPITAL_ACCOUNT_CODE ? s : s + (line.debe || 0)), 0)
+  );
+  const totalHaberSinCapital = roundMoney(
+    lineas.reduce((s, line) => (line.cuenta_codigo === CAPITAL_ACCOUNT_CODE ? s : s + (line.haber || 0)), 0)
+  );
+  const capital = roundMoney(totalDebeSinCapital - totalHaberSinCapital);
+  if (Math.abs(capital) <= MONEY_TOLERANCE) return entry;
+
+  const capitalLine = {
+    id: capitalIndex >= 0 ? lineas[capitalIndex].id : generateId(),
+    cuenta_codigo: CAPITAL_ACCOUNT_CODE,
+    debe: capital < 0 ? Math.abs(capital) : 0,
+    haber: capital > 0 ? capital : 0,
+  };
+
+  if (capitalIndex >= 0) {
+    lineas[capitalIndex] = capitalLine;
+  } else {
+    lineas.push(capitalLine);
+  }
+
+  const repairedDebe = roundMoney(lineas.reduce((s, l) => s + (l.debe || 0), 0));
+  const repairedHaber = roundMoney(lineas.reduce((s, l) => s + (l.haber || 0), 0));
+  if (Math.abs(repairedDebe - repairedHaber) > MONEY_TOLERANCE) return entry;
+
+  return {
+    ...entry,
+    lineas,
+    observaciones: entry.observaciones.includes('Capital recalculado')
+      ? entry.observaciones
+      : [entry.observaciones, 'Capital recalculado para cuadrar la apertura'].filter(Boolean).join(' | '),
+    actualizada_en: new Date().toISOString(),
+  };
+};
+
+const repairAiOpeningEntries = (entries: JournalEntry[]): JournalEntry[] =>
+  entries.map(repairAiOpeningEntry);
+
 interface AppState {
   accounts: Account[];
   entries: JournalEntry[];
@@ -321,11 +377,18 @@ export const useStore = create<AppState>()(
         // depreciación de maquinaria/herramientas) sin tocar las del usuario.
         const existing = new Set(state.accounts.map(a => a.codigo));
         const missing = seedAccounts().filter(a => !existing.has(a.codigo));
-        if (missing.length > 0) {
+        const repairedEntries = repairAiOpeningEntries(state.entries);
+        const entriesChanged = repairedEntries.some((entry, index) => entry !== state.entries[index]);
+        if (missing.length > 0 || entriesChanged) {
           useStore.setState({
-            accounts: [...state.accounts, ...missing].sort((a, b) =>
-              a.codigo.localeCompare(b.codigo, undefined, { numeric: true })
-            ),
+            ...(missing.length > 0
+              ? {
+                  accounts: [...state.accounts, ...missing].sort((a, b) =>
+                    a.codigo.localeCompare(b.codigo, undefined, { numeric: true })
+                  ),
+                }
+              : {}),
+            ...(entriesChanged ? { entries: repairedEntries } : {}),
           });
         }
       },

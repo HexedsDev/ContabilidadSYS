@@ -17,11 +17,9 @@ import {
   Calendar,
   CheckCircle2,
   Scale,
-  Bot,
   Wand2,
   FileText,
   Loader2,
-  Upload,
   ListChecks,
 } from 'lucide-react';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -41,6 +39,7 @@ import {
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 type Line = Omit<EntryLine, 'id'>;
+type ExerciseInput = { file?: File; text?: string };
 
 // Heurística: un EJERCICIO COMPLETO trae varias operaciones fechadas ("Febrero 2:",
 // "Abril 10:") y/o pide diario/mayor/balance. Esta pantalla genera UNA partida;
@@ -53,14 +52,29 @@ const looksLikeFullExercise = (text: string): boolean => {
     [];
   const pideTodo =
     /se\s+solicita|partidas?\s+de\s+diario|balance\s+de\s+saldos|capital\s+inicial|saldos\s+iniciales|inventario\s+inicial/.test(t);
-  return operacionesFechadas.length >= 2 || (pideTodo && operacionesFechadas.length >= 1);
+  const pideCierre =
+    /depreciaci[oó]n|depreciaciones|amortizaci[oó]n|cuentas?\s+incobrables|cuentas?\s+malas|reserva\s+para\s+cuentas/.test(t);
+  return operacionesFechadas.length >= 2 || (pideTodo && operacionesFechadas.length >= 1) || pideCierre || /saldos\s+iniciales/.test(t);
 };
+
+const MONEY_TOLERANCE = 0.01;
+const ROUNDING_TOLERANCE = 0.05;
+const MAX_AI_CORRECTION_ATTEMPTS = 3;
+const CAPITAL_ACCOUNT_CODE = '3.1.01';
+const IVA_ACCOUNT_CODES = new Set(['1.1.10', '2.1.05']);
+
+interface ExerciseLinePrep {
+  cuenta_codigo: string;
+  cuenta_nombre: string;
+  debe: number;
+  haber: number;
+}
 
 interface ExercisePartidaPrep {
   fecha: string;
   concepto: string;
   observaciones: string;
-  lineas: { cuenta_codigo: string; cuenta_nombre: string; debe: number; haber: number }[];
+  lineas: ExerciseLinePrep[];
   totalDebe: number;
   totalHaber: number;
   cuadrada: boolean;
@@ -79,7 +93,6 @@ export function RegistrarPartida() {
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const editId: string | undefined = location.state?.entryId;
   const entryToEdit = entries.find(e => e.id === editId);
@@ -107,6 +120,7 @@ export function RegistrarPartida() {
     resumen: string;
     partidas: ExercisePartidaPrep[];
   } | null>(null);
+  const [lastExerciseInput, setLastExerciseInput] = useState<ExerciseInput | null>(null);
   const [limpiarPrimero, setLimpiarPrimero] = useState(true);
   const [confirmExercise, setConfirmExercise] = useState(false);
   const exerciseFileRef = useRef<HTMLInputElement>(null);
@@ -137,6 +151,8 @@ export function RegistrarPartida() {
   const isBalanced = Math.abs(diff) < 0.01;
   const hasAmounts = totalDebe > 0 || totalHaber > 0;
   const aiEnabled = aiSettings.enabled && aiSettings.apiKey.trim().length > 0;
+  const exerciseProblems = exercise?.partidas.filter(p => !p.cuadrada || p.faltantes.length > 0) ?? [];
+  const exerciseHasProblems = exerciseProblems.length > 0;
 
   const handleAddLine = () => {
     setLineas(prev => [...prev, { cuenta_codigo: '', debe: 0, haber: 0 }]);
@@ -220,37 +236,138 @@ export function RegistrarPartida() {
     }
 
     if (unmatched.length > 0) {
-      // NO se re-cuadra: mover la diferencia a otra cuenta corrompería la partida.
-      warnings.push(
-        `No se reconocieron ${unmatched.length} cuenta(s): ${unmatched.join(', ')}. Agrégalas manualmente antes de contabilizar.`
-      );
-      return { lines: resolved, warnings };
+      throw new Error(`La IA usó cuenta(s) no reconocidas: ${unmatched.join(', ')}.`);
     }
 
-    const totalDebeResolved = resolved.reduce((sum, line) => sum + line.debe, 0);
-    const totalHaberResolved = resolved.reduce((sum, line) => sum + line.haber, 0);
-    const diffResolved = Number((totalDebeResolved - totalHaberResolved).toFixed(2));
-
-    if (Math.abs(diffResolved) > 0.01 && Math.abs(diffResolved) <= 0.05) {
-      // Diferencia de centavos por redondeo: se ajusta en el lado que ya tiene monto.
-      const last = resolved[resolved.length - 1];
-      if (diffResolved > 0 && last.haber > 0) {
-        last.haber = Number((last.haber + diffResolved).toFixed(2));
-      } else if (diffResolved < 0 && last.debe > 0) {
-        last.debe = Number((last.debe - diffResolved).toFixed(2));
-      } else {
-        warnings.push(`Quedó una diferencia de redondeo de ${formatCurrency(Math.abs(diffResolved))}.`);
-      }
-    } else if (Math.abs(diffResolved) > 0.05) {
-      warnings.push(
-        `El borrador quedó descuadrado por ${formatCurrency(Math.abs(diffResolved))}. Revisa los montos antes de contabilizar.`
+    const getDiff = () =>
+      Number(
+        (
+          resolved.reduce((sum, line) => sum + line.debe, 0) -
+          resolved.reduce((sum, line) => sum + line.haber, 0)
+        ).toFixed(2)
       );
+    const diffResolved = getDiff();
+
+    if (Math.abs(diffResolved) > MONEY_TOLERANCE && Math.abs(diffResolved) <= ROUNDING_TOLERANCE) {
+      // Diferencia de centavos por redondeo: se ajusta en el lado que ya tiene monto.
+      const preferred = resolved.find(
+        line =>
+          IVA_ACCOUNT_CODES.has(line.cuenta_codigo) &&
+          ((diffResolved > 0 && line.haber > 0) || (diffResolved < 0 && line.debe > 0))
+      );
+      const target =
+        preferred ??
+        resolved.find(line => (diffResolved > 0 ? line.haber > 0 : line.debe > 0));
+      if (!target) {
+        throw new Error(`La IA dejó una diferencia de redondeo de ${formatCurrency(Math.abs(diffResolved))}.`);
+      }
+      if (diffResolved > 0 && target.haber > 0) {
+        target.haber = Number((target.haber + diffResolved).toFixed(2));
+      } else if (diffResolved < 0 && target.debe > 0) {
+        target.debe = Number((target.debe - diffResolved).toFixed(2));
+      } else {
+        throw new Error(`La IA dejó una diferencia de redondeo de ${formatCurrency(Math.abs(diffResolved))}.`);
+      }
+    } else if (Math.abs(diffResolved) > ROUNDING_TOLERANCE) {
+      throw new Error(`La IA devolvió una partida descuadrada por ${formatCurrency(Math.abs(diffResolved))}.`);
+    }
+
+    const finalDiff = getDiff();
+    if (Math.abs(finalDiff) > MONEY_TOLERANCE) {
+      throw new Error(`La IA devolvió una partida descuadrada por ${formatCurrency(Math.abs(finalDiff))}.`);
     }
 
     return { lines: resolved, warnings };
   };
 
-  const prepararPartidaEjercicio = (p: AIExercisePartida): ExercisePartidaPrep => {
+  const roundMoney = (value: number) => Number(value.toFixed(2));
+
+  const withExerciseTotals = (partida: Omit<ExercisePartidaPrep, 'totalDebe' | 'totalHaber' | 'cuadrada'>): ExercisePartidaPrep => {
+    const totalDebe = roundMoney(partida.lineas.reduce((s, l) => s + l.debe, 0));
+    const totalHaber = roundMoney(partida.lineas.reduce((s, l) => s + l.haber, 0));
+    return {
+      ...partida,
+      totalDebe,
+      totalHaber,
+      cuadrada: Math.abs(totalDebe - totalHaber) <= MONEY_TOLERANCE && partida.lineas.length >= 2,
+    };
+  };
+
+  const balanceOpeningCapital = (partida: ExercisePartidaPrep): ExercisePartidaPrep => {
+    const lineas = partida.lineas.map(line => ({ ...line }));
+    const capitalIndex = lineas.findIndex(line => line.cuenta_codigo === CAPITAL_ACCOUNT_CODE);
+    const totalDebeSinCapital = roundMoney(
+      lineas.reduce((s, line) => (line.cuenta_codigo === CAPITAL_ACCOUNT_CODE ? s : s + line.debe), 0)
+    );
+    const totalHaberSinCapital = roundMoney(
+      lineas.reduce((s, line) => (line.cuenta_codigo === CAPITAL_ACCOUNT_CODE ? s : s + line.haber), 0)
+    );
+    const capital = roundMoney(totalDebeSinCapital - totalHaberSinCapital);
+
+    if (Math.abs(capital) <= MONEY_TOLERANCE) return partida;
+
+    const capitalLine: ExerciseLinePrep = {
+      cuenta_codigo: CAPITAL_ACCOUNT_CODE,
+      cuenta_nombre: accName(CAPITAL_ACCOUNT_CODE),
+      debe: capital < 0 ? Math.abs(capital) : 0,
+      haber: capital > 0 ? capital : 0,
+    };
+
+    if (capitalIndex >= 0) {
+      lineas[capitalIndex] = capitalLine;
+    } else {
+      lineas.push(capitalLine);
+    }
+
+    return withExerciseTotals({
+      ...partida,
+      observaciones: [partida.observaciones, 'Capital recalculado para cuadrar la apertura'].filter(Boolean).join(' | '),
+      lineas,
+      faltantes: partida.faltantes,
+    });
+  };
+
+  const adjustRoundingDifference = (partida: ExercisePartidaPrep): ExercisePartidaPrep => {
+    const diff = roundMoney(partida.totalDebe - partida.totalHaber);
+    if (Math.abs(diff) <= MONEY_TOLERANCE || Math.abs(diff) > ROUNDING_TOLERANCE) return partida;
+
+    const lineas = partida.lineas.map(line => ({ ...line }));
+    const preferredIndex = lineas.findIndex(
+      line =>
+        IVA_ACCOUNT_CODES.has(line.cuenta_codigo) &&
+        ((diff > 0 && line.haber > 0) || (diff < 0 && line.debe > 0))
+    );
+    const fallbackIndex =
+      diff > 0
+        ? lineas.findIndex(line => line.haber > 0)
+        : lineas.findIndex(line => line.debe > 0);
+    const targetIndex = preferredIndex >= 0 ? preferredIndex : fallbackIndex;
+    if (targetIndex < 0) return partida;
+
+    if (diff > 0) {
+      lineas[targetIndex].haber = roundMoney(lineas[targetIndex].haber + diff);
+    } else {
+      lineas[targetIndex].debe = roundMoney(lineas[targetIndex].debe - diff);
+    }
+
+    return withExerciseTotals({
+      ...partida,
+      observaciones: [partida.observaciones, 'Diferencia de centavos ajustada'].filter(Boolean).join(' | '),
+      lineas,
+      faltantes: partida.faltantes,
+    });
+  };
+
+  const enforceExerciseBalance = (partida: ExercisePartidaPrep, index: number): ExercisePartidaPrep => {
+    const isOpening =
+      index === 0 ||
+      /apertura|saldos?\s+iniciales|inventario\s+inicial/i.test(`${partida.concepto} ${partida.observaciones}`);
+
+    const adjustedOpening = isOpening ? balanceOpeningCapital(partida) : partida;
+    return adjustRoundingDifference(adjustedOpening);
+  };
+
+  const prepararPartidaEjercicio = (p: AIExercisePartida, index: number): ExercisePartidaPrep => {
     const faltantes: string[] = [];
     // Consolida por cuenta (neto debe−haber) para no repetir cuentas.
     const porCuenta = new Map<string, number>();
@@ -273,23 +390,72 @@ export function RegistrarPartida() {
         debe: neto > 0 ? Number(neto.toFixed(2)) : 0,
         haber: neto < 0 ? Number(Math.abs(neto).toFixed(2)) : 0,
       }));
-    const totalDebe = Number(lineasPrep.reduce((s, l) => s + l.debe, 0).toFixed(2));
-    const totalHaber = Number(lineasPrep.reduce((s, l) => s + l.haber, 0).toFixed(2));
-    return {
+    return enforceExerciseBalance(withExerciseTotals({
       fecha: p.fecha,
       concepto: p.concepto,
       observaciones: p.observaciones,
       lineas: lineasPrep,
-      totalDebe,
-      totalHaber,
-      cuadrada: Math.abs(totalDebe - totalHaber) < 0.01 && lineasPrep.length >= 2,
       faltantes,
-    };
+    }), index);
+  };
+
+  const buildCorrectionFeedback = (problemas: ExercisePartidaPrep[]) =>
+    problemas
+      .map(
+        p =>
+          `- "${p.concepto}" (${p.fecha}): Debe ${p.totalDebe.toFixed(2)} vs Haber ${p.totalHaber.toFixed(2)}${
+            p.faltantes.length > 0 ? `; cuentas no reconocidas: ${p.faltantes.join(', ')}` : ''
+          }`
+      )
+      .join('\n');
+
+  const buildStrictExerciseFeedback = (problemas: ExercisePartidaPrep[]) =>
+    [
+      'Estas partidas quedaron DESCUADRADAS o con cuentas inválidas:',
+      buildCorrectionFeedback(problemas),
+      '',
+      'Vuelve a resolver TODO el ejercicio desde cero.',
+      'Regla absoluta: ninguna partida puede salir con Debe diferente de Haber.',
+      'En la partida de apertura recalcula Capital como Activos menos Pasivos; no copies un capital que deje descuadre.',
+      'Usa únicamente cuentas de detalle del catálogo y montos derivados del enunciado.',
+    ].join('\n');
+
+  const publishExerciseResult = (
+    intento: {
+      result: Awaited<ReturnType<typeof analyzeExerciseWithOpenAI>>;
+      partidas: ExercisePartidaPrep[];
+      problemas: ExercisePartidaPrep[];
+    },
+    options?: { unresolved?: boolean }
+  ) => {
+    const partidas = intento.partidas;
+    const capitalLine = partidas[0]?.lineas.find(line => line.cuenta_codigo === CAPITAL_ACCOUNT_CODE);
+    const capitalApertura = capitalLine
+      ? roundMoney(capitalLine.haber - capitalLine.debe)
+      : intento.result.capitalInicial;
+    setExercise({ capitalInicial: capitalApertura, resumen: intento.result.resumen, partidas });
+    setLimpiarPrimero(entries.length > 0);
+
+    if (options?.unresolved) {
+      setAnalysisNote(
+        `La IA dejó ${intento.problemas.length} partida(s) con error. Usa Corregir antes de guardar.`
+      );
+      toast.warning('Corrección pendiente', 'El ejercicio queda bloqueado hasta que todas las partidas cuadren');
+      return;
+    }
+
+    setAnalysisNote(
+      `Ejercicio resuelto: ${partidas.length} partidas generadas, todas cuadradas. Revísalas abajo y guarda o contabiliza.`
+    );
+    toast.success('Ejercicio resuelto', `${partidas.length} partidas generadas, todas cuadradas`);
   };
 
   // Resuelve un EJERCICIO COMPLETO sin salir de esta pantalla: la IA genera la
   // apertura (con el capital calculado) y una partida por cada operación.
-  const runExercise = async (input: { file?: File; text?: string }) => {
+  const runExercise = async (
+    input: ExerciseInput,
+    options?: { initialFeedback?: string; keepCurrentExercise?: boolean }
+  ) => {
     if (!aiEnabled) return;
     if (!input.file && !input.text?.trim()) {
       toast.warning('Sin enunciado', 'Pega el ejercicio o sube el archivo del enunciado');
@@ -302,9 +468,10 @@ export function RegistrarPartida() {
     }
 
     setAnalysisLoading(true);
-    setExercise(null);
+    setLastExerciseInput(input);
+    if (!options?.keepCurrentExercise) setExercise(null);
     setAnalysisSource(input.file ? input.file.name : 'Ejercicio completo (texto)');
-    setAnalysisNote('Resolviendo el ejercicio completo: apertura + todas las operaciones...');
+    setAnalysisNote(options?.initialFeedback ? 'Corrigiendo el ejercicio con IA...' : 'Resolviendo el ejercicio completo: apertura + todas las operaciones...');
     try {
       const intentar = async (feedback?: string) => {
         const result = await analyzeExerciseWithOpenAI({
@@ -320,49 +487,26 @@ export function RegistrarPartida() {
         return { result, partidas, problemas: partidas.filter(p => !p.cuadrada || p.faltantes.length > 0) };
       };
 
-      let intento = await intentar();
-      if (intento.partidas.length === 0) throw new Error('No se pudieron interpretar partidas del ejercicio');
-
-      // Auto-corrección: si alguna partida quedó descuadrada o con cuentas sin
-      // resolver, se reintenta UNA vez describiéndole a la IA el error exacto,
-      // y se conserva el mejor de los dos resultados.
-      if (intento.problemas.length > 0) {
-        setAnalysisNote('Algunas partidas no cuadraron; pidiendo a la IA que las corrija...');
-        const detalle = intento.problemas
-          .map(
-            p =>
-              `- "${p.concepto}" (${p.fecha}): Debe ${p.totalDebe.toFixed(2)} vs Haber ${p.totalHaber.toFixed(2)}${
-                p.faltantes.length > 0 ? `; cuentas no reconocidas: ${p.faltantes.join(', ')}` : ''
-              }`
-          )
-          .join('\n');
-        try {
-          const reintento = await intentar(
-            `Estas partidas quedaron DESCUADRADAS o con cuentas inválidas:\n${detalle}\nVuelve a resolver TODO el ejercicio. Cada partida debe cuadrar al centavo, usando únicamente montos derivados del enunciado (jamás de los ejemplos). Recuerda la bonificación incentivo de ley (Q250.00 por trabajador) cuando el enunciado indique cuántos trabajadores hay.`
-          );
-          if (reintento.partidas.length > 0 && reintento.problemas.length < intento.problemas.length) {
-            intento = reintento;
-          }
-        } catch {
-          // Si el reintento falla, se conserva el primer resultado.
+      let intento: Awaited<ReturnType<typeof intentar>> | null = null;
+      let feedback = options?.initialFeedback;
+      for (let attempt = 1; attempt <= MAX_AI_CORRECTION_ATTEMPTS; attempt++) {
+        if (attempt > 1) {
+          setAnalysisNote(`Corrigiendo descuadres con la IA (intento ${attempt} de ${MAX_AI_CORRECTION_ATTEMPTS})...`);
         }
+        const current = await intentar(feedback);
+        if (current.partidas.length === 0) throw new Error('No se pudieron interpretar partidas del ejercicio');
+        intento = current;
+        if (current.problemas.length === 0) break;
+        feedback = buildStrictExerciseFeedback(current.problemas);
       }
 
-      const partidas = intento.partidas;
-      setExercise({ capitalInicial: intento.result.capitalInicial, resumen: intento.result.resumen, partidas });
-      setLimpiarPrimero(entries.length > 0);
-      const conProblemas = intento.problemas.length;
-      setAnalysisNote(
-        `Ejercicio resuelto: ${partidas.length} partidas generadas${conProblemas > 0 ? `, ${conProblemas} requieren revisión` : ''}. Revísalas abajo y guarda o contabiliza.`
-      );
-      if (conProblemas > 0) {
-        toast.warning(
-          'Ejercicio resuelto con avisos',
-          `${conProblemas} partida(s) requieren revisión; al contabilizar quedarán como borrador para corregirlas`
-        );
-      } else {
-        toast.success('Ejercicio resuelto', `${partidas.length} partidas generadas, todas cuadradas`);
+      if (!intento) throw new Error('No se pudo resolver el ejercicio');
+      if (intento.problemas.length > 0) {
+        publishExerciseResult(intento, { unresolved: true });
+        return;
       }
+
+      publishExerciseResult(intento);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo resolver el ejercicio';
       setAnalysisNote(message);
@@ -378,20 +522,30 @@ export function RegistrarPartida() {
     if (file) void runExercise({ file });
   };
 
+  const handleCorrectExercise = () => {
+    if (!lastExerciseInput || exerciseProblems.length === 0) return;
+    void runExercise(lastExerciseInput, {
+      initialFeedback: buildStrictExerciseFeedback(exerciseProblems),
+      keepCurrentExercise: true,
+    });
+  };
+
   const guardarEjercicio = (estado: 'borrador' | 'contabilizada') => {
     if (!exercise) return;
+    const pendientes = exercise.partidas.filter(p => !p.cuadrada || p.faltantes.length > 0);
+    if (pendientes.length > 0) {
+      toast.error(
+        'No se puede guardar',
+        `Hay ${pendientes.length} partida(s) sin cuadrar o con cuentas faltantes. Usa Corregir para recalcularlo.`
+      );
+      return;
+    }
     if (estado === 'contabilizada' && limpiarPrimero) clearData();
     const ordenadas = [...exercise.partidas].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
     let contabilizadas = 0;
-    let comoBorrador = 0;
     for (const p of ordenadas) {
-      // Garantía del sistema: una partida descuadrada o con cuentas faltantes
-      // JAMÁS se contabiliza (corrompería Mayor, Balance y estados); entra
-      // como borrador para corregirla a mano en el Libro Diario.
-      const esSegura = p.cuadrada && p.faltantes.length === 0;
-      const estadoFinal = estado === 'contabilizada' && esSegura ? 'contabilizada' : 'borrador';
+      const estadoFinal = estado === 'contabilizada' ? 'contabilizada' : 'borrador';
       if (estadoFinal === 'contabilizada') contabilizadas++;
-      else comoBorrador++;
       addEntry({
         fecha: p.fecha || empresa.periodo_inicio,
         concepto: p.concepto || 'Partida del ejercicio',
@@ -408,85 +562,10 @@ export function RegistrarPartida() {
     setConfirmExercise(false);
     setExercise(null);
     if (estado === 'contabilizada') {
-      if (comoBorrador > 0) {
-        toast.warning(
-          'Ejercicio registrado con pendientes',
-          `${contabilizadas} partida(s) contabilizadas; ${comoBorrador} quedaron como borrador por descuadre o cuentas faltantes — corrígelas en el Libro Diario`
-        );
-      } else {
-        toast.success('Ejercicio contabilizado', `${contabilizadas} partidas en el Libro Diario`);
-      }
+      toast.success('Ejercicio contabilizado', `${contabilizadas} partidas en el Libro Diario`);
       navigate('/app/diario');
     } else {
       toast.success('Cambios guardados', `${ordenadas.length} partidas guardadas como borrador en el Libro Diario`);
-    }
-  };
-
-  const handleAnalyzeDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!aiEnabled) {
-      toast.warning('Asistente IA desactivado', 'Activa la opcion en Configuracion para analizar documentos');
-      if (documentInputRef.current) documentInputRef.current.value = '';
-      return;
-    }
-    if (file.size > MAX_ANALYSIS_FILE_BYTES) {
-      toast.error('Archivo demasiado grande', `Maximo ${MAX_ANALYSIS_FILE_BYTES / 1024 / 1024} MB`);
-      if (documentInputRef.current) documentInputRef.current.value = '';
-      return;
-    }
-
-    setAnalysisLoading(true);
-    setExercise(null);
-    setAnalysisSource(file.name);
-    setAnalysisNote(null);
-
-    try {
-      const draft = await analyzeDocumentWithOpenAI({
-        file,
-        apiKey: aiSettings.apiKey,
-        accounts,
-        empresa,
-        model: OPENAI_DEFAULT_MODEL,
-      });
-
-      const { lines: resolvedLines, warnings } = normalizeAnalysisDraft(draft);
-      const today = new Date().toISOString().split('T')[0];
-      const fechaIA = draft.fecha?.trim() ?? '';
-      const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaIA);
-      if (fechaIA && !fechaValida) {
-        warnings.push(`La fecha "${fechaIA}" no tiene formato válido; se usó la fecha de hoy.`);
-      }
-
-      setFecha(fechaValida ? fechaIA : today);
-      setConcepto(draft.concepto?.trim() || `Documento analizado: ${file.name}`);
-      setObservaciones(
-        [draft.observaciones?.trim(), `Fuente: ${file.name}`, draft.confidence ? `Confianza: ${Math.round(draft.confidence * 100)}%` : null]
-          .filter(Boolean)
-          .join(' | ')
-      );
-      setLineas(
-        resolvedLines.map(line => ({
-          cuenta_codigo: line.cuenta_codigo,
-          debe: line.debe,
-          haber: line.haber,
-        }))
-      );
-      setAnalysisNote(
-        [`Se generó un borrador con ${resolvedLines.length} líneas. Revisa antes de contabilizar.`, ...warnings].join(' ')
-      );
-      if (warnings.length > 0) {
-        toast.warning('Documento analizado con advertencias', warnings[0]);
-      } else {
-        toast.success('Documento analizado', 'El borrador se completó automáticamente');
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'No se pudo analizar el documento';
-      setAnalysisNote(message);
-      toast.error('Error al analizar documento', message);
-    } finally {
-      setAnalysisLoading(false);
-      if (documentInputRef.current) documentInputRef.current.value = '';
     }
   };
 
@@ -510,15 +589,50 @@ export function RegistrarPartida() {
     setAnalysisNote(null);
 
     try {
-      const draft = await analyzeDocumentWithOpenAI({
-        text: analysisText,
-        apiKey: aiSettings.apiKey,
-        accounts,
-        empresa,
-        model: OPENAI_DEFAULT_MODEL,
-      });
+      let resolved:
+        | { draft: AIAnalysisDraft; resolvedLines: Line[]; warnings: string[] }
+        | null = null;
+      let feedback: string | undefined;
+      let lastError: Error | null = null;
 
-      const { lines: resolvedLines, warnings } = normalizeAnalysisDraft(draft);
+      for (let attempt = 1; attempt <= MAX_AI_CORRECTION_ATTEMPTS; attempt++) {
+        if (attempt > 1) {
+          setAnalysisNote(`Corrigiendo descuadre con la IA (intento ${attempt} de ${MAX_AI_CORRECTION_ATTEMPTS})...`);
+        }
+        try {
+          const draft = await analyzeDocumentWithOpenAI({
+            text: analysisText,
+            apiKey: aiSettings.apiKey,
+            accounts,
+            empresa,
+            model: OPENAI_DEFAULT_MODEL,
+            feedback,
+          });
+          const { lines: resolvedLines, warnings } = normalizeAnalysisDraft(draft);
+          resolved = { draft, resolvedLines, warnings };
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error('No se pudo analizar el texto');
+          const retryable = /descuadr|cuenta|reconoc|línea|linea|redondeo/i.test(lastError.message);
+          if (!retryable || attempt === MAX_AI_CORRECTION_ATTEMPTS) {
+            throw lastError;
+          }
+          feedback = [
+            'El intento anterior fue rechazado por el sistema:',
+            lastError.message,
+            '',
+            'Vuelve a generar la partida desde cero.',
+            'Regla absoluta: Debe y Haber deben cuadrar al centavo antes de responder.',
+            'No inventes cuentas; usa únicamente cuentas de detalle del catálogo.',
+          ].join('\n');
+        }
+      }
+
+      if (!resolved) {
+        throw lastError ?? new Error('La IA no logró generar una partida cuadrada');
+      }
+
+      const { draft, resolvedLines, warnings } = resolved;
       const today = new Date().toISOString().split('T')[0];
       const fechaIA = draft.fecha?.trim() ?? '';
       const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaIA);
@@ -682,26 +796,16 @@ export function RegistrarPartida() {
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-primary-600" />
-                  <h2 className="text-sm font-semibold text-text-main">Analizar documento con IA</h2>
-                </div>
+                <h2 className="text-sm font-semibold text-text-main">Analizador de partidas</h2>
                 <p className="text-sm text-text-muted mt-1">
-                  Sube una factura, recibo o documento escaneado para que el sistema proponga un borrador de partida.
+                  Pega el contenido de la operación o ejercicio para generar un borrador contable.
                 </p>
               </div>
               <Badge variant="success" dot size="sm">
-                IA activa
+                Activa
               </Badge>
             </div>
 
-            <input
-              ref={documentInputRef}
-              type="file"
-              accept="application/pdf,image/*,.txt,.md,.csv,.html"
-              onChange={handleAnalyzeDocument}
-              className="hidden"
-            />
             <input
               ref={exerciseFileRef}
               type="file"
@@ -710,27 +814,12 @@ export function RegistrarPartida() {
               className="hidden"
             />
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                onClick={() => documentInputRef.current?.click()}
-                disabled={analysisLoading}
-              >
-                {analysisLoading ? 'Analizando...' : 'Seleccionar documento'}
-              </Button>
-              <div className="text-xs text-text-muted">
-                Usa la clave configurada en <span className="font-medium text-text-main">Configuración</span>.
-              </div>
-            </div>
-
             <div className="space-y-3">
               <Textarea
-                label="O pega texto del documento"
+                label="Pega texto del documento"
                 value={analysisText}
                 onChange={e => setAnalysisText(e.target.value)}
-                placeholder="Pega aquí el contenido del documento si no quieres subir un archivo..."
-                hint="Esta opción solo aparece cuando el asistente IA está activo."
+                placeholder="Pega aquí el contenido de la factura, recibo o ejercicio..."
               />
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <Button
@@ -774,13 +863,40 @@ export function RegistrarPartida() {
           <div className="px-5 py-3 border-b border-border-soft flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
               <Wand2 className="w-4 h-4 text-primary-600" />
-              <h2 className="text-sm font-semibold text-text-main">Ejercicio resuelto</h2>
-              <Badge variant="primary" size="sm">
-                Capital inicial: {formatCurrency(exercise.capitalInicial)}
-              </Badge>
+              <h2 className="text-sm font-semibold text-text-main">
+                {exerciseHasProblems ? 'Ejercicio requiere corrección' : 'Ejercicio resuelto'}
+              </h2>
+              {exerciseHasProblems ? (
+                <Badge variant="warning" size="sm" dot>
+                  {exerciseProblems.length} por corregir
+                </Badge>
+              ) : (
+                <Badge variant="primary" size="sm">
+                  Capital inicial: {formatCurrency(exercise.capitalInicial)}
+                </Badge>
+              )}
             </div>
             <span className="text-xs text-text-muted">{exercise.partidas.length} partida(s) generadas</span>
           </div>
+          {exerciseHasProblems && (
+            <div className="px-5 py-3 border-b border-warning/20 bg-warning-soft/60 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-start gap-2 text-sm text-warning">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p>
+                  Hay partidas sin cuadrar o con cuentas faltantes. El guardado está bloqueado hasta corregirlas.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                onClick={handleCorrectExercise}
+                disabled={analysisLoading || !lastExerciseInput}
+              >
+                {analysisLoading ? 'Corrigiendo...' : 'Corregir'}
+              </Button>
+            </div>
+          )}
           <CardContent className="p-0 divide-y divide-border-soft">
             {exercise.partidas.map((p, i) => (
               <div key={i} className="p-4">
@@ -848,10 +964,16 @@ export function RegistrarPartida() {
                 size="sm"
                 leftIcon={<Save className="w-4 h-4" />}
                 onClick={() => guardarEjercicio('borrador')}
+                disabled={exerciseHasProblems || analysisLoading}
               >
                 Guardar cambios
               </Button>
-              <Button size="sm" leftIcon={<ListChecks className="w-4 h-4" />} onClick={() => setConfirmExercise(true)}>
+              <Button
+                size="sm"
+                leftIcon={<ListChecks className="w-4 h-4" />}
+                onClick={() => setConfirmExercise(true)}
+                disabled={exerciseHasProblems || analysisLoading}
+              >
                 Contabilizar todas ({exercise.partidas.length})
               </Button>
             </div>

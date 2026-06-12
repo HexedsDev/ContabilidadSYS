@@ -92,6 +92,7 @@ const SYSTEM_PROMPT = [
   'PAGOS PARCIALES O MIXTOS: si el documento indica parte al contado y parte al crédito, divide la contrapartida: en compras, HABER 1.1.01 Caja por el contado y HABER 2.1.01 Proveedores (o 2.1.04 Documentos por Pagar a Corto Plazo si se firmaron documentos) por el saldo; en ventas, DEBE 1.1.01 Caja y DEBE 1.1.05 Clientes o 1.1.07. El IVA se calcula sobre el TOTAL de la factura, no solo sobre la parte pagada.',
   'CUADRE OBLIGATORIO: la suma del Debe debe ser EXACTAMENTE igual a la suma del Haber, al centavo. Antes de responder, suma ambas columnas; si hay diferencia de Q0.01 por redondeo, ajústala en la línea del IVA.',
   'VERIFICA CADA PARTIDA POR SEPARADO antes de responder: suma su Debe y su Haber; si no coinciden al centavo, recalcula ESA partida desde el documento. Una sola partida descuadrada invalida toda la respuesta.',
+  'PROHIBIDO devolver partidas descuadradas, incompletas o "para revisar". Si una partida no cuadra, no termines: vuelve a calcular la contrapartida correcta con las cuentas del catálogo hasta que Debe y Haber sean iguales.',
   'Los EJEMPLOS adjuntos son SOLO de formato y método: está PROHIBIDO copiar sus montos, fechas o totales a tu respuesta. Cada cifra debe derivarse EXCLUSIVAMENTE del documento o enunciado del usuario.',
   'Cada línea lleva monto solo en "debe" o solo en "haber" (el otro campo en 0). Nunca uses montos negativos ni repitas la misma cuenta en dos líneas: consolida los montos en una sola línea por cuenta.',
   'Si el documento muestra fecha, devuélvela en formato YYYY-MM-DD. Si solo muestra día y mes, complétala con el año del período fiscal indicado por el usuario. Si no hay fecha clara, deja "fecha" como cadena vacía; nunca inventes una fecha.',
@@ -376,8 +377,9 @@ export async function analyzeDocumentWithOpenAI(params: {
   accounts: Account[];
   empresa: Empresa;
   model?: string;
+  feedback?: string;
 }): Promise<AIAnalysisDraft> {
-  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL } = params;
+  const { file, text, apiKey, accounts, empresa, model = OPENAI_DEFAULT_MODEL, feedback } = params;
   if (!apiKey.trim()) throw new Error('Falta la API key de OpenAI');
   if (!file && !text?.trim()) {
     throw new Error('Debes subir un archivo o escribir el contenido del documento');
@@ -402,6 +404,7 @@ export async function analyzeDocumentWithOpenAI(params: {
     '- Si el archivo contiene varias facturas o documentos, genera la partida solo del documento principal e indícalo en observaciones.',
     '- Si falta algún dato de texto (fecha, contraparte), deja el campo vacío; los montos nunca se inventan: si no puedes leer el monto total, devuelve confidence menor a 0.3 y explica el problema en observaciones.',
     '- Las fechas parciales ("15 de abril") se completan con el año del período fiscal; las relativas ("ayer") se resuelven con la fecha de hoy.',
+    ...(feedback ? ['', 'CORRECCIÓN SOLICITADA — el intento anterior fue inválido:', feedback] : []),
   ].join('\n');
 
   const content = await buildUserContent({ prompt, file, text, textLabel: 'Texto proporcionado por el usuario:' });
@@ -473,17 +476,33 @@ const EXERCISE_SCHEMA = {
 const APERTURA_RULES = [
   'Estás resolviendo un EJERCICIO CONTABLE COMPLETO: el enunciado trae unos saldos iniciales (inventario inicial) y luego una lista de operaciones del período.',
   'Genera SIEMPRE, como PRIMERA partida del arreglo, la PARTIDA DE APERTURA con los saldos iniciales:',
-  '- Carga al DEBE cada cuenta de ACTIVO por su saldo. Mapeo: Inventario/Mercaderías → 1.1.13; Caja → 1.1.01; Bancos → 1.1.03; Clientes → 1.1.05; Documentos por Cobrar → 1.1.07; Mobiliario y Equipo → 1.2.04; Equipo de Computación → 1.2.05; Vehículos/Vehículo → 1.2.06; Maquinaria → 1.2.07; Edificios → 1.2.03; Terrenos → 1.2.02.',
+  '- Carga al DEBE cada cuenta de ACTIVO por su saldo. Mapeo: Inventario/Mercaderías → 1.1.13; Caja → 1.1.01; Bancos → 1.1.03; Clientes → 1.1.05; Documentos por Cobrar → 1.1.07; Mobiliario y Equipo → 1.2.04; Equipo de Computación/Cómputo → 1.2.05; Vehículos/Vehículo → 1.2.06; Maquinaria → 1.2.07; Edificios → 1.2.03; Terrenos → 1.2.02; Gastos de Organización → 1.2.12.',
+  '- Si el enunciado dice Inmuebles y también indica regla 70% edificio + 30% terreno, divide el monto desde la apertura: DEBE 1.2.03 Edificios por el 70% y DEBE 1.2.02 Terrenos por el 30%. No uses 1.2.01 en ese caso.',
   '- Abona al HABER cada cuenta de PASIVO por su saldo. Mapeo: Proveedores → 2.1.01; Acreedores → 2.1.02; Cuentas por Pagar → 2.1.03; Documentos por Pagar → 2.1.04.',
   '- El CAPITAL es la diferencia: capital = (suma de activos) − (suma de pasivos). Abónalo al HABER en 3.1.01 Capital. El campo "capitalInicial" del JSON debe ser ese número exacto.',
-  '- Si el enunciado NO da el monto del capital (lo pide calcular), calcúlalo tú con esa diferencia. La partida de apertura SIEMPRE debe cuadrar (Debe = Haber).',
+  '- Si el enunciado NO da el monto del capital (lo pide calcular), calcúlalo tú con esa diferencia. Si el enunciado trae un capital que no cuadra contra activos y pasivos, recalcula el capital correcto: la partida de apertura SIEMPRE debe cuadrar (Debe = Haber).',
+  '- Antes de devolver la apertura, calcula total_activos_debe, total_pasivos_haber y capital. Verificación obligatoria: total_activos_debe debe ser igual a total_pasivos_haber + capital. Si no coincide, corrige Capital 3.1.01.',
   'Después de la apertura, genera UNA partida por CADA operación del período, en orden de fecha, aplicando las reglas del método (IVA 12% separado, devoluciones, planilla IGSS, etc.).',
+  'Si el ejercicio es de depreciaciones, amortizaciones o cuentas incobrables aunque NO tenga operaciones fechadas, además de la apertura genera las partidas de ajuste que correspondan.',
+  'AJUSTES DE DEPRECIACIÓN: DEBE gasto de depreciación y HABER depreciación acumulada por el mismo monto. Cuentas: Edificios 5% → DEBE 5.2.20 / HABER 1.3.01; Mobiliario y Equipo 20% → 5.2.21 / 1.3.02; Equipo de Computación 33.33% → 5.2.22 / 1.3.03; Vehículos 20% → 5.2.23 / 1.3.04; Maquinaria 20% → 5.2.26 / 1.3.05; Herramientas 25% → 5.2.27 / 1.3.09.',
+  'AJUSTES DE AMORTIZACIÓN: Gastos de Organización, Marcas y Patentes y Derecho de Llave se amortizan al 20% anual. Usa DEBE 5.2.24 y HABER 1.3.06 para Gastos de Organización, 1.3.07 para Marcas y Patentes, 1.3.10 para Derecho de Llave.',
+  'CUENTAS INCOBRABLES: si el enunciado indica 3% de Clientes, calcula Clientes × 3%; DEBE 5.2.25 Cuentas Incobrables / Cuentas Malas y HABER 1.3.08 Reserva para Cuentas Incobrables.',
+  'Cada partida de ajuste debe cuadrar por sí sola: el total del gasto al Debe debe ser exactamente igual al total de acumuladas o reservas al Haber.',
   'El arreglo "partidas" va en orden cronológico (apertura primero). Cada partida debe cuadrar al centavo.',
   'Usa el año del período fiscal para todas las fechas. Respeta el día y mes indicados en cada operación aunque el enunciado mezcle nombres de meses.',
   'En "resumen" escribe una frase con el capital inicial y cuántas operaciones procesaste.',
 ].join('\n');
 
-const EXERCISE_INSTRUCTIONS = `${SYSTEM_PROMPT}\n\n${APERTURA_RULES}\n\nEJEMPLOS RESUELTOS CON EL MÉTODO EXACTO (imítalos en estructura, códigos y cuadre):\n\n${FEW_SHOT_EXAMPLES}`;
+const DEPRECIATION_EXERCISE_EXAMPLE = [
+  'EJEMPLO 5 — Ejercicio de depreciaciones, amortización e incobrables.',
+  'Documento: saldos iniciales con Inmuebles Q275,000.00, Mobiliario y Equipo Q89,000.00, Equipo de Computación Q35,000.00, Vehículos Q125,000.00, Gastos de Organización Q25,000.00 y Clientes Q70,000.00. Observación: Inmuebles = 70% edificio y 30% terreno; incobrables 3%; amortización 20%.',
+  'Apertura: Edificios 192,500.00; Terrenos 82,500.00; Mobiliario 89,000.00; Equipo de Computación 35,000.00; Vehículos 125,000.00; Gastos de Organización 25,000.00; Clientes 70,000.00; Capital 619,000.00. Debe = Haber.',
+  'Depreciación: Edificios 9,625.00; Mobiliario 17,800.00; Equipo de Computación 11,665.50; Vehículos 25,000.00. Total 64,090.50 contra sus acumuladas.',
+  'Amortización: Gastos de Organización 5,000.00 contra 1.3.06. Incobrables: Clientes 70,000.00 × 3% = 2,100.00 contra 1.3.08.',
+  'Todas las partidas deben salir separadas y cuadradas: apertura, depreciación, amortización e incobrables.',
+].join('\n');
+
+const EXERCISE_INSTRUCTIONS = `${SYSTEM_PROMPT}\n\n${APERTURA_RULES}\n\nEJEMPLOS RESUELTOS CON EL MÉTODO EXACTO (imítalos en estructura, códigos y cuadre):\n\n${FEW_SHOT_EXAMPLES}\n\n${DEPRECIATION_EXERCISE_EXAMPLE}`;
 
 const parseExerciseResult = (raw: string): AIExerciseResult => {
   const text = raw.trim();
