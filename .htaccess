@@ -2,9 +2,9 @@
   RewriteEngine On
   RewriteBase /
 
+  RewriteRule ^api/openai/v1/responses$ api/openai/v1/responses.php [L]
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
-
