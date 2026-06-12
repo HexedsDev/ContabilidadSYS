@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual de usuario - Sistema Contable</title>
+    <meta
+      name="description"
+      content="Manual de usuario del sistema contable: como navegar, registrar partidas, revisar libros, exportar reportes y restaurar respaldos."
+    />
+    <style>
+      :root {
+        --bg: #f3f1ea;
+        --bg-2: #ece6db;
+        --panel: rgba(255, 255, 255, 0.86);
+        --panel-strong: #ffffff;
+        --text: #1f2937;
+        --muted: #5f6978;
+        --line: #d8d1c2;
+        --accent: #116a65;
+        --accent-soft: #dff3f1;
+        --warm: #8b5a25;
+        --warm-soft: #f4e4cf;
+        --shadow: 0 18px 42px rgba(31, 41, 55, 0.08);
+        --radius: 16px;
+        --radius-sm: 12px;
+        --max: 1180px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
+          radial-gradient(circle at top left, #e8f4f2 0, transparent 34%),
+          radial-gradient(circle at right 20%, #f5e5d2 0, transparent 30%),
+          var(--bg);
+        font: 15px/1.65 "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      code,
+      pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 13px;
+      }
+
+      .shell {
+        max-width: var(--max);
+        margin: 0 auto;
+        padding: 28px 20px 44px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.8fr);
+        gap: 20px;
+        margin-bottom: 22px;
+      }
+
+      .hero-main,
+      .hero-side,
+      section,
+      .card,
+      .toc,
+      .table-box,
+      .tip {
+        background: var(--panel);
+        border: 1px solid rgba(216, 209, 194, 0.92);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .hero-main,
+      .hero-side {
+        border-radius: calc(var(--radius) + 2px);
+        padding: 26px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 26px;
+      }
+
+      .brand img {
+        width: 52px;
+        height: 52px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 3.6vw, 3.5rem);
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+      }
+
+      .lead {
+        margin: 14px 0 0;
+        max-width: 66ch;
+        color: var(--muted);
+        font-size: 1.03rem;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--panel-strong);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .chip.accent {
+        background: var(--accent-soft);
+        border-color: rgba(17, 106, 101, 0.14);
+        color: #0c4f4b;
+      }
+
+      .chip.warm {
+        background: var(--warm-soft);
+        border-color: rgba(139, 90, 37, 0.14);
+        color: #71481e;
+      }
+
+      .hero-side h2,
+      .toc h2 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+      }
+
+      .hero-side p,
+      .toc p,
+      section p {
+        color: var(--muted);
+      }
+
+      .snapshot {
+        display: grid;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .snapshot-item {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #fff, #fbfaf7);
+        padding: 12px 14px;
+      }
+
+      .snapshot-item span {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .snapshot-item strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .toc {
+        position: sticky;
+        top: 20px;
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .toc a {
+        display: block;
+        margin: 2px 0;
+        padding: 8px 10px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: var(--muted);
+        transition: background 140ms ease, color 140ms ease;
+      }
+
+      .toc a:hover {
+        background: #f4f0ea;
+        color: var(--text);
+      }
+
+      .content {
+        display: grid;
+        gap: 18px;
+      }
+
+      section {
+        border-radius: var(--radius);
+        padding: 22px;
+      }
+
+      section h2 {
+        margin: 0 0 12px;
+        font-size: 1.34rem;
+        letter-spacing: -0.02em;
+      }
+
+      section h3 {
+        margin: 18px 0 8px;
+        font-size: 1rem;
+      }
+
+      .tip {
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin-top: 14px;
+        background: linear-gradient(180deg, #fff, #fdfbf7);
+      }
+
+      .tip strong {
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+      }
+
+      .card {
+        border-radius: 14px;
+        padding: 16px;
+        background: linear-gradient(180deg, #fff, #faf8f3);
+      }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .table-box {
+        overflow: hidden;
+        border-radius: var(--radius);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 14px 15px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      th {
+        background: #f7f4ed;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+      }
+
+      pre {
+        margin: 14px 0 0;
+        padding: 16px 18px;
+        overflow: auto;
+        border-radius: 14px;
+        background: #0f172a;
+        color: #e2e8f0;
+        border: 1px solid #0b1220;
+      }
+
+      .footer {
+        margin-top: 18px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .layout,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .toc {
+          position: static;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 16px 14px 28px;
+        }
+
+        .hero-main,
+        .hero-side,
+        section,
+        .toc {
+          padding: 18px;
+        }
+
+        body {
+          font-size: 14px;
+        }
+
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tr {
+          border-bottom: 1px solid var(--line);
+        }
+
+        td {
+          border-bottom: 0;
+          padding: 10px 0;
+        }
+
+        td::before {
+          content: attr(data-label);
+          display: block;
+          margin-bottom: 3px;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-size: 11px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="hero">
+        <div class="hero-main">
+          <div class="brand">
+            <img src="/logo-full.svg" alt="Sistema Contable" />
+            <div>
+              <p class="eyebrow">Manual de usuario</p>
+              <div class="small">Sistema Contable</div>
+            </div>
+          </div>
+
+          <h1>Una guia para usar el sistema sin adivinar nada.</h1>
+          <p class="lead">
+            Este manual esta pensado para alguien que solo quiere entrar, registrar movimiento, revisar libros,
+            sacar reportes y dejar un respaldo listo. Va al grano y trata de explicar la pantalla como la usaria una
+            persona en oficina, no como un documento de laboratorio.
+          </p>
+
+          <div class="chips">
+            <div class="chip accent"><strong>Primero</strong> navegar</div>
+            <div class="chip"><strong>Despues</strong> registrar</div>
+            <div class="chip warm"><strong>Al final</strong> exportar o respaldar</div>
+          </div>
+        </div>
+
+        <aside class="hero-side">
+          <h2>Atajo mental</h2>
+          <p>
+            Si algo no te queda claro, piensa en esta secuencia: revisar el dashboard, entrar a la partida, validar
+            en libros y luego sacar reportes.
+          </p>
+
+          <div class="snapshot">
+            <div class="snapshot-item">
+              <span>Inicio del recorrido</span>
+              <strong>Dashboard</strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Captura de datos</span>
+              <strong>Registrar Partida</strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Consulta</span>
+              <strong>Libro Diario y Mayor</strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Salida</span>
+              <strong>Reportes y respaldo JSON</strong>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="layout">
+        <aside class="toc">
+          <h2>Contenido</h2>
+          <a href="#antes">Antes de empezar</a>
+          <a href="#navegacion">Como moverse</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#partidas">Registrar partidas</a>
+          <a href="#libros">Consultar libros</a>
+          <a href="#reportes">Exportar reportes</a>
+          <a href="#configuracion">Configurar la empresa</a>
+          <a href="#respaldo">Respaldos e importacion</a>
+          <a href="#problemas">Problemas comunes</a>
+        </aside>
+
+        <main class="content">
+          <section id="antes">
+            <h2>Antes de empezar</h2>
+            <p>
+              El sistema trabaja con tres piezas que conviene tener presentes desde el inicio: cuentas, partidas y
+              datos de empresa. Si esas tres cosas estan en orden, el resto fluye bastante bien.
+            </p>
+
+            <div class="grid">
+              <div class="card">
+                <h3>Lo que guarda la aplicacion</h3>
+                <p class="small">
+                  Cuentas, partidas, alertas, configuracion de empresa, tema visual y estado de la barra lateral.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Lo que veras siempre</h3>
+                <p class="small">
+                  Un layout fijo con menu lateral, barra superior, avisos, accesos a libros y rutas de configuracion.
+                </p>
+              </div>
+            </div>
+
+            <div class="tip">
+              <strong>Consejo:</strong> si acabas de abrir el sistema, mira primero si el nombre de la empresa y el
+              ciclo contable son correctos en la barra superior. Eso te ahorra dudas mas adelante.
+            </div>
+          </section>
+
+          <section id="navegacion">
+            <h2>Como moverse por el sistema</h2>
+            <p>
+              A la izquierda tienes el menu principal. Cada grupo tiene una funcion bastante clara: operacion,
+              libros, estados, configuracion y reportes.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zona</th>
+                    <th>Para que sirve</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Zona">Barra lateral</td>
+                    <td data-label="Para que sirve">Mueve entre modulos sin perder el contexto de la pantalla actual.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Zona">Barra superior</td>
+                    <td data-label="Para que sirve">Muestra el ciclo contable, el numero de partidas y el acceso al tema.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Zona">Botones de accion</td>
+                    <td data-label="Para que sirve">Abren formularios, cargan demo, exportan archivos o limpian datos.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tip">
+              <strong>Si usas movil:</strong> el menu se abre desde el icono superior izquierdo. No hace falta
+              buscar nada mas raro.
+            </div>
+          </section>
+
+          <section id="dashboard">
+            <h2>Dashboard</h2>
+            <p>
+              Esta es la pantalla de entrada. Resume si la contabilidad esta cuadrada, cuantas partidas hay, cuantas
+              alertas siguen abiertas y cual es el estado general del periodo.
+            </p>
+
+            <div class="grid">
+              <div class="card">
+                <h3>Que mirar primero</h3>
+                <p class="small">
+                  Si el indicador de ecuacion contable no cuadra, conviene revisar partidas y alertas antes de seguir
+                  capturando.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Que hacer desde aqui</h3>
+                <p class="small">
+                  Puedes cargar datos de ejemplo, crear una nueva partida o ir directo al libro diario para revisar
+                  registros recientes.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="partidas">
+            <h2>Registrar partidas</h2>
+            <p>
+              La pantalla de registro es donde nace el movimiento contable. Ahí se capturan fecha, concepto, estado,
+              observaciones y las lineas de debe/haber.
+            </p>
+
+            <h3>Flujo recomendado</h3>
+            <div class="grid">
+              <div class="card">
+                <h3>1. Elegir la fecha</h3>
+                <p class="small">Usa la fecha real del movimiento, no la del dia en que te acordaste de registrarlo.</p>
+              </div>
+              <div class="card">
+                <h3>2. Escribir el concepto</h3>
+                <p class="small">Hazlo claro y corto. Sirve para ubicar la partida despues sin leer toda la historia.</p>
+              </div>
+              <div class="card">
+                <h3>3. Agregar lineas</h3>
+                <p class="small">
+                  Cada linea apunta a una cuenta y lleva debe o haber. Si una linea no tiene cuenta correcta, la
+                  partida despues se nota rara en reportes.
+                </p>
+              </div>
+              <div class="card">
+                <h3>4. Revisar antes de guardar</h3>
+                <p class="small">
+                  Asegurate de que el total del debe y el total del haber queden coherentes. Esa pequena revision vale
+                  oro.
+                </p>
+              </div>
+            </div>
+
+            <div class="tip">
+              <strong>Regla simple:</strong> si la partida no parece entendible cuando la lees en voz alta, probablemente
+              conviene reescribir el concepto antes de guardarla.
+            </div>
+          </section>
+
+          <section id="libros">
+            <h2>Consultar libros</h2>
+            <p>
+              Los libros no son una pantalla decorativa. Te sirven para comprobar que lo registrado realmente tiene
+              sentido. Si algo se ve mal aqui, casi seguro tambien se vera mal en reportes.
+            </p>
+
+            <div class="grid">
+              <div class="card">
+                <h3>Libro Diario</h3>
+                <p class="small">
+                  Muestra las partidas en orden cronologico. Es el mejor lugar para revisar un asiento especifico.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Libro Mayor</h3>
+                <p class="small">
+                  Agrupa por cuenta y deja ver el movimiento acumulado. Sirve para seguir un saldo sin recorrer todo el
+                  diario.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Balance de Saldos</h3>
+                <p class="small">
+                  Te ayuda a validar la fotografia general del periodo antes de sacar estados financieros.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Auditoria</h3>
+                <p class="small">
+                  Reune alertas y observaciones. Si algo no cuadra, esta pantalla suele dar una pista bastante util.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="reportes">
+            <h2>Exportar reportes</h2>
+            <p>
+              La pantalla de reportes sirve para sacar informacion ya armada: PDF para entregar o imprimir, CSV para
+              hoja de calculo y JSON para respaldo tecnico.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Formato</th>
+                    <th>Uso normal</th>
+                    <th>Cuida esto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Formato">PDF</td>
+                    <td data-label="Uso normal">Estados, libros y reportes formales.</td>
+                    <td data-label="Cuida esto">Que la empresa y el ciclo esten correctos en el encabezado.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Formato">CSV</td>
+                    <td data-label="Uso normal">Analisis rapido en Excel o LibreOffice.</td>
+                    <td data-label="Cuida esto">Que las fechas y conceptos tengan sentido para quien lo abra.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Formato">JSON</td>
+                    <td data-label="Uso normal">Respaldo completo y restauracion del sistema.</td>
+                    <td data-label="Cuida esto">Guardar una copia fuera del equipo si el dato es importante.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="configuracion">
+            <h2>Configurar la empresa</h2>
+            <p>
+              La pantalla de configuracion guarda los datos que aparecen en encabezados, reportes y respaldos. No es
+              solo un formulario administrativo; afecta lo que se imprime y lo que se restaura.
+            </p>
+
+            <div class="grid">
+              <div class="card">
+                <h3>Datos obligatorios</h3>
+                <p class="small">
+                  Razon social, NIT, direccion, moneda, simbolo y periodo fiscal deben quedar coherentes para no ver
+                  reportes "a medias".
+                </p>
+              </div>
+              <div class="card">
+                <h3>Que cambia al guardar</h3>
+                <p class="small">
+                  Se actualiza el encabezado del sistema y los PDF usan esa informacion cuando se exportan.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="respaldo">
+            <h2>Respaldos e importacion</h2>
+            <p>
+              El respaldo JSON ahora incluye partidas, cuentas y configuracion de empresa. Eso permite restaurar la
+              base contable sin reconstruir todo a mano.
+            </p>
+
+            <div class="grid">
+              <div class="card">
+                <h3>Cuando exportas</h3>
+                <p class="small">
+                  Se genera un archivo con el estado actual. Conviene ponerle una copia de seguridad fuera del equipo
+                  si vas a usarlo para trabajo serio.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Cuando importas</h3>
+                <p class="small">
+                  Si el archivo trae empresa, se restaura tambien. Si no la trae, el sistema conserva la configuracion
+                  actual y solo recupera cuentas y partidas.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Antes de abrir un archivo</h3>
+                <p class="small">
+                  Asegurate de que venga de una fuente confiable. El sistema valida bastante, pero la costumbre de
+                  revisar no sobra.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Buen habito</h3>
+                <p class="small">
+                  Haz un respaldo antes de importar otro. Es la manera mas simple de evitar un susto por un archivo
+                  viejo o incompleto.
+                </p>
+              </div>
+            </div>
+
+            <pre>{
+  "entries": [ ... ],
+  "accounts": [ ... ],
+  "empresa": { ... },
+  "exportedAt": "2026-05-22T00:00:00.000Z",
+  "version": "2"
+}</pre>
+          </section>
+
+          <section id="problemas">
+            <h2>Problemas comunes</h2>
+            <p>
+              Esta parte te ahorra tiempo cuando el sistema no hace exactamente lo que esperabas.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Situacion</th>
+                    <th>Que revisar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Situacion">La partida no aparece donde la esperabas</td>
+                    <td data-label="Que revisar">Revisa la fecha, el estado y si guardaste realmente el registro.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Situacion">Un PDF sale con datos viejos</td>
+                    <td data-label="Que revisar">Abre la configuracion de empresa y confirma que guardaste los cambios.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Situacion">El JSON importado no restaura todo</td>
+                    <td data-label="Que revisar">Puede ser un backup viejo; si no trae empresa, el sistema deja la actual tal como estaba.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Situacion">Ves alertas en auditoria</td>
+                    <td data-label="Que revisar">Entra al libro diario y sigue la partida señalada hasta encontrar la cuenta o monto raro.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tip">
+              <strong>Cierre honesto:</strong> el sistema no intenta adivinar por ti. Si los datos de entrada estan
+              bien, los reportes salen limpios; si algo se capturo mal, la pista suele estar en la partida original.
+            </div>
+          </section>
+
+          <section>
+            <h2>Resumen corto</h2>
+            <p>
+              Abres el dashboard, registras la partida, revisas libros, corriges si hace falta y al final exportas o
+              respaldas. Si sigues ese orden, el sistema se siente bastante natural.
+            </p>
+          </section>
+
+          <div class="footer">
+            Abrir con <code>/manual-usuario.html</code> mientras corre Vite.
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

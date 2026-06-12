@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Documentacion del sistema contable</title>
+    <meta
+      name="description"
+      content="Guia practica para entender la estructura, rutas, estado global, reportes y respaldo del sistema contable."
+    />
+    <style>
+      :root {
+        --bg: #f5f4ef;
+        --bg-soft: #ece8dd;
+        --card: #ffffff;
+        --card-soft: #fbfaf7;
+        --text: #1f2937;
+        --muted: #5b6472;
+        --line: #d9d4c7;
+        --accent: #0f766e;
+        --accent-soft: #dff5f2;
+        --accent-2: #8c5a1f;
+        --accent-2-soft: #f4e6d4;
+        --shadow: 0 16px 40px rgba(31, 41, 55, 0.08);
+        --radius: 16px;
+        --radius-sm: 12px;
+        --max: 1180px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
+          radial-gradient(circle at top left, #e9f4f1 0, transparent 34%),
+          radial-gradient(circle at right 18%, #f5ead7 0, transparent 28%),
+          var(--bg);
+        font: 15px/1.65 "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .wrap {
+        max-width: var(--max);
+        margin: 0 auto;
+        padding: 28px 20px 44px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.4fr 0.9fr;
+        gap: 20px;
+        align-items: stretch;
+        margin-bottom: 22px;
+      }
+
+      .hero-main,
+      .hero-side,
+      section,
+      .note,
+      .toc,
+      .table-box {
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(217, 212, 199, 0.9);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-main {
+        border-radius: calc(var(--radius) + 2px);
+        padding: 28px;
+      }
+
+      .hero-side {
+        border-radius: calc(var(--radius) + 2px);
+        padding: 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 26px;
+      }
+
+      .brand img {
+        width: 52px;
+        height: 52px;
+        display: block;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 3.4vw, 3.45rem);
+        line-height: 1.03;
+        letter-spacing: -0.03em;
+      }
+
+      .lead {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 1.04rem;
+        max-width: 68ch;
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--line);
+        background: var(--card-soft);
+      }
+
+      .pill strong {
+        font-weight: 700;
+      }
+
+      .pill.accent {
+        background: var(--accent-soft);
+        border-color: rgba(15, 118, 110, 0.16);
+        color: #0b534d;
+      }
+
+      .pill.warm {
+        background: var(--accent-2-soft);
+        border-color: rgba(140, 90, 31, 0.16);
+        color: #684117;
+      }
+
+      .hero-side h2 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+      }
+
+      .hero-side p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .snapshot {
+        margin-top: 18px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .snapshot-item {
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, #fff, #fcfbf8);
+      }
+
+      .snapshot-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-bottom: 3px;
+      }
+
+      .snapshot-item strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 270px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .toc {
+        position: sticky;
+        top: 20px;
+        border-radius: var(--radius);
+        padding: 18px;
+      }
+
+      .toc h2 {
+        margin: 0 0 12px;
+        font-size: 0.95rem;
+      }
+
+      .toc a {
+        display: block;
+        padding: 8px 10px;
+        margin: 2px 0;
+        text-decoration: none;
+        color: var(--muted);
+        border-radius: 10px;
+        transition: background 140ms ease, color 140ms ease;
+      }
+
+      .toc a:hover {
+        background: #f2efea;
+        color: var(--text);
+      }
+
+      .content {
+        display: grid;
+        gap: 18px;
+      }
+
+      section,
+      .table-box {
+        border-radius: var(--radius);
+      }
+
+      section {
+        padding: 22px;
+      }
+
+      section h2 {
+        margin: 0 0 10px;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+
+      section h3 {
+        margin: 20px 0 8px;
+        font-size: 1rem;
+      }
+
+      section p {
+        margin: 10px 0;
+      }
+
+      .note {
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin: 14px 0 0;
+        background: linear-gradient(180deg, #fff, #fbfaf7);
+      }
+
+      .note strong {
+        color: var(--accent);
+      }
+
+      .table-box {
+        overflow: hidden;
+        border-radius: var(--radius);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        background: #fff;
+      }
+
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 14px 15px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      th {
+        background: #f7f5ef;
+        color: #374151;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      code,
+      pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 13px;
+      }
+
+      pre {
+        margin: 14px 0 0;
+        padding: 16px 18px;
+        overflow: auto;
+        border-radius: 14px;
+        background: #0f172a;
+        color: #e2e8f0;
+        border: 1px solid #0b1220;
+      }
+
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 10px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(180deg, #fff, #faf8f3);
+        padding: 16px;
+      }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .grid,
+        .cols {
+          grid-template-columns: 1fr;
+        }
+
+        .toc {
+          position: static;
+        }
+      }
+
+      @media (max-width: 720px) {
+        body {
+          font-size: 14px;
+        }
+
+        .wrap {
+          padding: 16px 14px 28px;
+        }
+
+        .hero-main,
+        .hero-side,
+        section,
+        .toc {
+          padding: 18px;
+        }
+
+        table,
+        thead,
+        tbody,
+        th,
+        td,
+        tr {
+          display: block;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tr {
+          border-bottom: 1px solid var(--line);
+        }
+
+        td {
+          border-bottom: 0;
+          padding: 10px 0;
+        }
+
+        td::before {
+          content: attr(data-label);
+          display: block;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--muted);
+          margin-bottom: 3px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <div class="hero-main">
+          <div class="brand">
+            <img src="/logo-full.svg" alt="Sistema Contable" />
+            <div>
+              <p class="eyebrow">Documentacion interna</p>
+              <div class="small">Sistema Contable</div>
+            </div>
+          </div>
+
+          <h1>Guia practica para entender el sistema sin pelearse con el codigo.</h1>
+          <p class="lead">
+            Esta pagina resume como esta armado el sistema, que hace cada modulo y donde mirar cuando algo no
+            cuadra. La idea es que sirva tanto para orientarse rapido como para entrar a fondo cuando haga falta.
+          </p>
+
+          <div class="hero-meta">
+            <div class="pill accent"><strong>Estado global</strong> en Zustand</div>
+            <div class="pill"><strong>Rutas</strong> en React Router</div>
+            <div class="pill warm"><strong>Respaldo JSON</strong> con empresa, cuentas y partidas</div>
+          </div>
+        </div>
+
+        <aside class="hero-side">
+          <h2>Lo que conviene saber primero</h2>
+          <p>
+            Si vienes de cero, no necesitas leer todo el repo de una vez. Empieza por la navegacion, luego el
+            store y al final los reportes.
+          </p>
+
+          <div class="snapshot">
+            <div class="snapshot-item">
+              <span>Entrada principal</span>
+              <strong><code>src/App.tsx</code></strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Estado y acciones</span>
+              <strong><code>src/store/useStore.ts</code></strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Backups y validacion</span>
+              <strong><code>src/utils/validation.ts</code></strong>
+            </div>
+            <div class="snapshot-item">
+              <span>Exportacion e importacion</span>
+              <strong><code>src/pages/Reportes.tsx</code></strong>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="grid">
+        <aside class="toc">
+          <h2>Indice</h2>
+          <a href="#panorama">Panorama general</a>
+          <a href="#rutas">Rutas y pantallas</a>
+          <a href="#estado">Estado global</a>
+          <a href="#modelos">Modelos de datos</a>
+          <a href="#reportes">Reportes y respaldo</a>
+          <a href="#seguridad">Importacion segura</a>
+          <a href="#trabajo">Como se usa en la practica</a>
+          <a href="#archivos">Archivos que vale la pena leer</a>
+        </aside>
+
+        <main class="content">
+          <section id="panorama">
+            <h2>Panorama general</h2>
+            <p>
+              El sistema es una aplicacion contable de una sola pagina. La estructura es simple a proposito: una
+              capa de rutas para cada vista, un store central para el estado y utilidades separadas para calculos,
+              PDF y validacion.
+            </p>
+            <p>
+              En la interfaz se mueven partidas, cuentas, alertas, reportes y la configuracion de la empresa. La
+              mayor parte de las pantallas no calculan por su cuenta; consultan el store y reutilizan helpers para no
+              duplicar logica.
+            </p>
+
+            <div class="note">
+              <strong>Lectura rapida:</strong> si quieres entender el sistema con poco esfuerzo, sigue este orden:
+              <code>App.tsx</code> -&gt; <code>store/useStore.ts</code> -&gt; <code>pages/Reportes.tsx</code> -&gt;
+              <code>utils/validation.ts</code> -&gt; <code>utils/pdfExport.ts</code>.
+            </div>
+          </section>
+
+          <section id="rutas">
+            <h2>Rutas y pantallas</h2>
+            <p>
+              Todas las vistas cuelgan de <code>/</code> con un layout compartido. El menu lateral agrupa la
+              aplicacion por bloques: operacion, libros, estados y configuracion.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ruta</th>
+                    <th>Vista</th>
+                    <th>Que hace</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Ruta"><code>/</code></td>
+                    <td data-label="Vista">Dashboard</td>
+                    <td data-label="Que hace">Resume el estado contable, ratios, partidas recientes y alertas.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/apertura</code></td>
+                    <td data-label="Vista">Partida de Apertura</td>
+                    <td data-label="Que hace">Permite levantar el punto de partida del periodo.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/registrar</code></td>
+                    <td data-label="Vista">Registrar Partida</td>
+                    <td data-label="Que hace">Crea y edita asientos contables con lineas de debe y haber.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/diario</code></td>
+                    <td data-label="Vista">Libro Diario</td>
+                    <td data-label="Que hace">Lista cronologica de partidas con acciones de consulta y mantenimiento.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/mayor</code></td>
+                    <td data-label="Vista">Libro Mayor</td>
+                    <td data-label="Que hace">Agrupa movimientos por cuenta y muestra sus saldos.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/balance</code></td>
+                    <td data-label="Vista">Balance de Saldos</td>
+                    <td data-label="Que hace">Consolida saldos para revision y cierre.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/resultados</code></td>
+                    <td data-label="Vista">Estado de Resultados</td>
+                    <td data-label="Que hace">Calcula ingresos, costos, gastos y utilidad.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/balance-general</code></td>
+                    <td data-label="Vista">Balance General</td>
+                    <td data-label="Que hace">Muestra activo, pasivo y patrimonio a una fecha dada.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/catalogo</code></td>
+                    <td data-label="Vista">Catalogo de Cuentas</td>
+                    <td data-label="Que hace">Administra el arbol de cuentas y su estructura base.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/auditoria</code></td>
+                    <td data-label="Vista">Auditoria</td>
+                    <td data-label="Que hace">Agrupa alertas, inconsistencias y revisiones pendientes.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/reportes</code></td>
+                    <td data-label="Vista">Exportar Reportes</td>
+                    <td data-label="Que hace">Saca PDF, CSV y JSON. Tambien importa respaldos.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Ruta"><code>/configuracion</code></td>
+                    <td data-label="Vista">Empresa</td>
+                    <td data-label="Que hace">Guarda los datos que aparecen en encabezados y reportes.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="estado">
+            <h2>Estado global</h2>
+            <p>
+              El store vive en <code>src/store/useStore.ts</code> y usa Zustand con persistencia. Esto significa que
+              la app no depende de una base de datos externa para arrancar; guarda el estado local y lo recupera al
+              volver a abrirse.
+            </p>
+
+            <div class="cols">
+              <div class="card">
+                <h3>Datos principales</h3>
+                <p class="small">
+                  <code>accounts</code>, <code>entries</code>, <code>alerts</code> y <code>empresa</code> son las
+                  piezas que sostienen casi toda la interfaz.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Preferencias de UI</h3>
+                <p class="small">
+                  <code>theme</code> y <code>sidebarCollapsed</code> tambien se persisten, para que la experiencia
+                  siga igual al recargar.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Acciones clave</h3>
+                <p class="small">
+                  Hay funciones para iniciar el store, cargar datos de ejemplo, agregar partidas, borrar cuentas,
+                  limpiar datos y actualizar la empresa.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Dato importante</h3>
+                <p class="small">
+                  La accion <code>clearData()</code> restablece partidas y alertas, pero conserva el catalogo base de
+                  cuentas. No es un borrado brutal de todo.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="modelos">
+            <h2>Modelos de datos</h2>
+            <p>
+              El modelo es bastante directo. Las cuentas describen la estructura contable, las partidas guardan el
+              movimiento y la empresa alimenta los encabezados, reportes y respaldos.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Objeto</th>
+                    <th>Campos relevantes</th>
+                    <th>Uso real</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Objeto"><code>Account</code></td>
+                    <td data-label="Campos relevantes">
+                      <code>codigo</code>, <code>nombre</code>, <code>tipo</code>, <code>naturaleza</code>,
+                      <code>nivel</code>, <code>cuenta_padre</code>, <code>permite_movimientos</code>,
+                      <code>estado</code>
+                    </td>
+                    <td data-label="Uso real">Alimenta catalogo, reportes, validacion y calculo de saldos.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Objeto"><code>JournalEntry</code></td>
+                    <td data-label="Campos relevantes">
+                      <code>numero</code>, <code>fecha</code>, <code>concepto</code>, <code>estado</code>,
+                      <code>lineas</code>, <code>creada_en</code>, <code>actualizada_en</code>
+                    </td>
+                    <td data-label="Uso real">Es la unidad operativa del sistema y la base de casi todos los reportes.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Objeto"><code>EntryLine</code></td>
+                    <td data-label="Campos relevantes">
+                      <code>cuenta_codigo</code>, <code>debe</code>, <code>haber</code>,
+                      <code>concepto_linea</code>
+                    </td>
+                    <td data-label="Uso real">Permite repartir una partida entre varias cuentas con control de montos.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Objeto"><code>Empresa</code></td>
+                    <td data-label="Campos relevantes">
+                      <code>razon_social</code>, <code>nit</code>, <code>direccion</code>, <code>telefono</code>,
+                      <code>email</code>, <code>moneda</code>, <code>simbolo_moneda</code>,
+                      <code>periodo_inicio</code>, <code>periodo_fin</code>, <code>ciclo</code>
+                    </td>
+                    <td data-label="Uso real">Aparece en encabezados, reportes PDF y ahora tambien en el backup JSON.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="reportes">
+            <h2>Reportes y respaldo</h2>
+            <p>
+              La pantalla de reportes es la puerta de salida del sistema. Desde ahi se exporta PDF, CSV y JSON. Los
+              PDFs toman datos del store, mientras que el JSON empaqueta el estado que interesa restaurar despues.
+            </p>
+
+            <div class="cols">
+              <div class="card">
+                <h3>PDF</h3>
+                <p class="small">
+                  Los generadores viven en <code>src/utils/pdfExport.ts</code>. Cada uno recibe partidas y cuentas,
+                  arma el documento y usa la configuracion de empresa para el encabezado.
+                </p>
+              </div>
+              <div class="card">
+                <h3>CSV</h3>
+                <p class="small">
+                  El CSV sale de <code>src/pages/Reportes.tsx</code> y se arma con una fila por linea de partida.
+                  Es util cuando alguien quiere abrir los movimientos en Excel sin tocar el sistema.
+                </p>
+              </div>
+              <div class="card">
+                <h3>JSON</h3>
+                <p class="small">
+                  El respaldo incluye <code>entries</code>, <code>accounts</code> y <code>empresa</code>, ademas de
+                  metadatos como <code>exportedAt</code> y <code>version</code>.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Compatibilidad</h3>
+                <p class="small">
+                  Los respaldos viejos siguen funcionando. Si no traen <code>empresa</code>, la importacion respeta la
+                  configuracion actual del sistema.
+                </p>
+              </div>
+            </div>
+
+            <pre>{
+  "entries": [],
+  "accounts": [],
+  "empresa": {
+    "razon_social": "Mi Empresa, S.A.",
+    "nit": "0000000-0",
+    "direccion": "Ciudad de Guatemala",
+    "telefono": "",
+    "email": "",
+    "moneda": "GTQ",
+    "simbolo_moneda": "Q",
+    "periodo_inicio": "2026-01-01",
+    "periodo_fin": "2026-12-31",
+    "ciclo": "Ciclo Contable 2026"
+  },
+  "exportedAt": "2026-05-22T00:00:00.000Z",
+  "version": "2"
+}</pre>
+          </section>
+
+          <section id="seguridad">
+            <h2>Importacion segura</h2>
+            <p>
+              La validacion de backups no se limita a checar que el JSON "abra". El archivo se parsea con un reviver
+              que bloquea claves peligrosas, y despues cada objeto pasa por validacion estricta.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Validacion</th>
+                    <th>Que evita</th>
+                    <th>Donde vive</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Validacion">Tamano maximo de importacion</td>
+                    <td data-label="Que evita">Archivos gigantes y bloqueos al leer en memoria.</td>
+                    <td data-label="Donde vive"><code>src/utils/validation.ts</code></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Validacion">Reviver con claves prohibidas</td>
+                    <td data-label="Que evita">Prototype pollution con <code>__proto__</code>, <code>constructor</code> y <code>prototype</code>.</td>
+                    <td data-label="Donde vive"><code>src/utils/validation.ts</code></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Validacion">Longitudes maximas</td>
+                    <td data-label="Que evita">Campos desbordados y payloads innecesarios.</td>
+                    <td data-label="Donde vive"><code>src/utils/validation.ts</code></td>
+                  </tr>
+                  <tr>
+                    <td data-label="Validacion">Chequeo de cuentas referenciadas</td>
+                    <td data-label="Que evita">Partidas con lineas que apuntan a cuentas inexistentes.</td>
+                    <td data-label="Donde vive"><code>src/utils/validation.ts</code></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="note">
+              <strong>Detalle importante:</strong> la importacion nueva no rompe los archivos viejos. Si el backup no
+              trae <code>empresa</code>, el sistema restaura partidas y cuentas, pero conserva la empresa que ya estaba
+              cargada.
+            </div>
+          </section>
+
+          <section id="trabajo">
+            <h2>Como se usa en la practica</h2>
+            <p>
+              El recorrido normal es bastante limpio: el usuario entra al dashboard, revisa el estado general,
+              registra partidas, consulta libros, corrige alertas y al final exporta reportes o un respaldo.
+            </p>
+
+            <div class="cols">
+              <div class="card">
+                <h3>Cuando se abre la app</h3>
+                <p class="small">
+                  <code>App.tsx</code> inicializa el store y el tema. El layout se encarga de la barra lateral, el
+                  encabezado, el modo oscuro y los atajos de navegacion.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Cuando se crea una partida</h3>
+                <p class="small">
+                  La partida se guarda en el store, luego los reportes y balances la toman desde ahi. No hay una
+                  segunda fuente de verdad escondida.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Cuando se exporta</h3>
+                <p class="small">
+                  El usuario no exporta una vista "bonita"; exporta el estado real de cuentas, partidas y empresa.
+                  Eso hace que el respaldo sirva para volver a cargar el sistema.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Cuando algo no cuadra</h3>
+                <p class="small">
+                  Primero revisa <code>Auditoria</code>, luego <code>Balance de Saldos</code> y por ultimo la partida
+                  concreta en <code>Libro Diario</code>.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="archivos">
+            <h2>Archivos que vale la pena leer</h2>
+            <p class="muted">
+              Si solo tienes unos minutos, estos son los que mejor explican el sistema por dentro.
+            </p>
+
+            <div class="table-box">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Archivo</th>
+                    <th>Por que importa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="Archivo"><code>src/App.tsx</code></td>
+                    <td data-label="Por que importa">Define las rutas y conecta el proveedor de toast y el tema.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Archivo"><code>src/layouts/Layout.tsx</code></td>
+                    <td data-label="Por que importa">Muestra como se organiza la navegacion y donde vive cada accion global.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Archivo"><code>src/store/useStore.ts</code></td>
+                    <td data-label="Por que importa">Es la pieza que sostiene el estado, las acciones y la persistencia.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Archivo"><code>src/pages/Reportes.tsx</code></td>
+                    <td data-label="Por que importa">Conecta exportacion, importacion y el flujo del respaldo JSON.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Archivo"><code>src/utils/validation.ts</code></td>
+                    <td data-label="Por que importa">Protege la importacion de datos no confiables y valida el backup completo.</td>
+                  </tr>
+                  <tr>
+                    <td data-label="Archivo"><code>src/utils/pdfExport.ts</code></td>
+                    <td data-label="Por que importa">Arma los PDF con la informacion financiera real del store.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="footer">
+            Abrir esta pagina en el navegador con <code>/documentacion.html</code> mientras corre Vite.
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
