@@ -13,7 +13,7 @@ const initialForm = {
   nombre: '',
   email: '',
   password: '',
-  rol: 'contador' as const,
+  rol: 'super_admin' as const,
 };
 
 export function AdminUsuarios() {
@@ -30,8 +30,8 @@ export function AdminUsuarios() {
 
   const stats = useMemo(() => {
     const active = users.filter(user => user.activo).length;
-    const counters = users.filter(user => user.rol === 'contador').length;
-    return { total: users.length, active, counters };
+    const superAdmins = users.filter(user => user.rol === 'super_admin').length;
+    return { total: users.length, active, superAdmins };
   }, [users]);
 
   const resetForm = () => setForm(initialForm);
@@ -52,7 +52,7 @@ export function AdminUsuarios() {
       return;
     }
 
-    toast.success('Usuario creado', 'El nuevo contador quedó registrado');
+    toast.success('Usuario creado', 'El nuevo Super Admin quedó registrado');
     setOpen(false);
     resetForm();
   };
@@ -79,7 +79,7 @@ export function AdminUsuarios() {
     <div className="space-y-6">
       <PageHeader
         title="Gestión de usuarios"
-        description="El Super Admin puede crear, desactivar y eliminar contadores."
+        description="Los usuarios activos tienen permisos completos de Super Admin."
         icon={UserRoundCog}
         actions={
           <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setOpen(true)}>
@@ -103,8 +103,8 @@ export function AdminUsuarios() {
         </Card>
         <Card>
           <CardContent className="pt-5">
-            <p className="text-xs uppercase tracking-widest text-text-muted">Contadores</p>
-            <p className="mt-2 text-3xl font-semibold text-primary-700">{stats.counters}</p>
+            <p className="text-xs uppercase tracking-widest text-text-muted">Super Admins</p>
+            <p className="mt-2 text-3xl font-semibold text-primary-700">{stats.superAdmins}</p>
           </CardContent>
         </Card>
       </div>
@@ -175,7 +175,7 @@ export function AdminUsuarios() {
           resetForm();
         }}
         title="Crear usuario"
-        description="Registra un nuevo contador para acceder al sistema."
+        description="Registra un nuevo Super Admin para acceder al sistema."
         maxWidth="lg"
         footer={
           <>
@@ -205,14 +205,14 @@ export function AdminUsuarios() {
             label="Nombre"
             value={form.nombre}
             onChange={e => setForm(prev => ({ ...prev, nombre: e.target.value }))}
-            placeholder="Nombre del contador"
+            placeholder="Nombre del usuario"
           />
           <Input
             label="Email"
             type="email"
             value={form.email}
             onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-            placeholder="contador@empresa.com"
+            placeholder="usuario@empresa.com"
           />
           <Input
             label="Contraseña"
@@ -224,10 +224,10 @@ export function AdminUsuarios() {
           <div>
             <label className="block text-xs font-medium text-text-muted mb-1.5 uppercase tracking-wide">Rol</label>
             <div className="rounded-sm border border-border-strong bg-surface-soft px-3 py-2.5 text-sm text-text-main">
-              Contador
+              Super Admin
             </div>
             <p className="mt-1 text-xs text-text-muted">
-              En esta versión el Super Admin crea contadores directamente.
+              Todos los usuarios de esta instalación tienen permisos de Super Admin.
             </p>
           </div>
         </form>

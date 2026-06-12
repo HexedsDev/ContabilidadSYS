@@ -20,7 +20,7 @@ const DEFAULT_DERIK_USER: User = {
   nombre: 'Monky Derik',
   email: 'monky.derik@contabilidad.sys',
   password: 'monky2026',
-  rol: 'contador',
+  rol: 'super_admin',
   activo: true,
   creado_en: '2026-01-02T00:00:00.000Z',
 };
@@ -30,7 +30,7 @@ const DEFAULT_MARK_USER: User = {
   nombre: 'Monky Mark',
   email: 'monky.mark@contabilidad.sys',
   password: 'monky2026',
-  rol: 'contador',
+  rol: 'super_admin',
   activo: true,
   creado_en: '2026-01-03T00:00:00.000Z',
 };
@@ -40,7 +40,7 @@ const DEFAULT_EMPERATRIZ_USER: User = {
   nombre: 'Monky Emperatriz',
   email: 'monky.emperatriz@contabilidad.sys',
   password: 'monky2026',
-  rol: 'contador',
+  rol: 'super_admin',
   activo: true,
   creado_en: '2026-01-04T00:00:00.000Z',
 };
@@ -60,15 +60,15 @@ const syncSeedUsers = (users: User[]): User[] => {
   });
 };
 
+const promoteAllUsersToSuperAdmin = (users: User[]): User[] =>
+  users.map(user => ({ ...user, rol: 'super_admin' }));
+
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 const makeResult = (success: boolean, message: string): AuthResult => ({ success, message });
 
 const findUserByEmail = (users: User[], email: string) =>
   users.find(user => normalizeEmail(user.email) === normalizeEmail(email));
-
-const getActiveSuperAdminCount = (users: User[]) =>
-  users.filter(user => user.rol === 'super_admin' && user.activo).length;
 
 const canKeepSuperAdmin = (users: User[], targetId: string, nextActive: boolean, nextRole?: UserRole) => {
   const target = users.find(user => user.id === targetId);
@@ -137,16 +137,12 @@ export const useAuthStore = create<AuthState>()(
         if (findUserByEmail(users, email)) {
           return makeResult(false, 'Ya existe un usuario con ese email');
         }
-        if (userData.rol === 'super_admin' && getActiveSuperAdminCount(users) > 0) {
-          return makeResult(false, 'Ya existe un Super Admin activo');
-        }
-
         const newUser: User = {
           id: generateId(),
           nombre: userData.nombre.trim(),
           email,
           password: userData.password,
-          rol: userData.rol,
+          rol: 'super_admin',
           activo: userData.activo ?? true,
           creado_en: new Date().toISOString(),
         };
@@ -247,11 +243,11 @@ export const useAuthStore = create<AuthState>()(
         const seededUsers = seedUsers().filter(user => !removed.has(user.id));
         // Persisted users come FIRST so active/deleted state is respected.
         // Seeded users are added only when no persisted user shares the same id/email.
-        const users = [...persistedUsers, ...seededUsers].reduce<User[]>((acc, user) => {
+        const users = promoteAllUsersToSuperAdmin([...persistedUsers, ...seededUsers].reduce<User[]>((acc, user) => {
           const exists = acc.some(item => item.id === user.id || item.email === user.email);
           if (!exists) acc.push(user);
           return acc;
-        }, []);
+        }, []));
         const currentUser =
           state.currentUser && users.some(user => user.id === state.currentUser?.id && user.activo)
             ? users.find(user => user.id === state.currentUser?.id) ?? null
